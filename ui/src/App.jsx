@@ -98,6 +98,14 @@ function Thread({ ev, acks, now }) {
   )
 }
 
+function uuid() {
+  if (globalThis.crypto && crypto.randomUUID) return crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : (r & 3) | 8).toString(16)
+  })
+}
+
 export default function App() {
   const [events, setEvents] = useState([])
   const [acks, setAcks] = useState({}) // event_id -> [ack]
@@ -187,7 +195,7 @@ export default function App() {
     try {
       const r = await fetch('/broadcast', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uuid() },
         body: JSON.stringify({ message }),
       })
       const body = await r.json()
@@ -204,8 +212,9 @@ export default function App() {
         })
         setText('')
       }
-    } catch {
-      setError('Could not reach the app.')
+    } catch (e) {
+      console.error(e)
+      setError(`Could not send: ${e.message}`)
     } finally {
       setBusy(false)
     }
