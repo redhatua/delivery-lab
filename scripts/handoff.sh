@@ -40,7 +40,8 @@ say "no legacy builds running or queued"
 ENV_COMMIT=$(env_sync)
 LIVE_DIGEST=$(live_baseline | jq -r '.image | split("@")[1]')
 [[ "$LIVE_DIGEST" == "$(env_digest)" ]] || fail "live digest $LIVE_DIGEST differs from env $(env_digest)"
-live_baseline | jq -S . > "$LAB/evidence/baseline-at-handoff.json"
+# keep the first pre-adoption snapshot when resuming
+[[ -f "$LAB/evidence/baseline-at-handoff.json" ]] || live_baseline | jq -S . > "$LAB/evidence/baseline-at-handoff.json"
 say "baseline: chart ${CHART_COMMIT:0:12} env ${ENV_COMMIT:0:12} digest ${LIVE_DIGEST:0:19}"
 
 # 3. revoke the Jenkins deploy identity, drop its credential, prove it is denied

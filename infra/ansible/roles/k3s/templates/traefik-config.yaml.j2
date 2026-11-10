@@ -14,3 +14,11 @@ spec:
         nodePort: 30080
       websecure:
         nodePort: 30443
+    # NodePort has no load balancer address, so Ingress status stays empty and Argo
+    # would report it Progressing forever. Publish the node address instead.
+    providers:
+      kubernetesIngress:
+        publishedService:
+          enabled: false
+    additionalArguments:
+      - "--providers.kubernetesingress.ingressendpoint.ip={{ k3s_ip }}"
