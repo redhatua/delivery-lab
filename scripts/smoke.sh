@@ -6,7 +6,7 @@ BASE="${1:-http://192.168.77.20:30080}"
 WANT="${2:-3}"
 
 for _ in $(seq 1 60); do
-  n=$(curl -fsS -m 3 "$BASE/members" 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
+  n=$(curl -fsS -m 3 "$BASE/members" 2>/dev/null | jq '.members | length' 2>/dev/null || echo 0)
   [[ "$n" == "$WANT" ]] && break
   sleep 2
 done
