@@ -117,9 +117,14 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [now, setNow] = useState(Date.now())
   const end = useRef(null)
+  const seen = useRef([])
 
   const addEvent = useCallback((ev) => {
-    setEvents((cur) => (cur.some((e) => e.event_id === ev.event_id) ? cur : [...cur, ev]))
+    setEvents((cur) =>
+      cur.some((e) => e.event_id === ev.event_id)
+        ? cur.map((e) => (e.event_id === ev.event_id ? { ...e, ...ev } : e))
+        : [...cur, ev],
+    )
   }, [])
   const addAck = useCallback((a) => {
     setAcks((cur) => {
@@ -128,6 +133,20 @@ export default function App() {
       return { ...cur, [a.event_id]: [...list, a] }
     })
   }, [])
+
+  useEffect(() => {
+    seen.current = events.map((e) => e.event_id)
+  }, [events])
+
+  // After a dropped socket, replies that arrived meanwhile are read from the status API.
+  const reconcile = useCallback(() => {
+    seen.current.forEach((id) =>
+      fetch(`/broadcasts/${id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => d && d.acks.forEach((a) => addAck({ ...a, event_id: id })))
+        .catch(() => {}),
+    )
+  }, [addAck])
 
   // Live feed over a websocket; reconnects with a growing pause.
   useEffect(() => {
@@ -141,6 +160,7 @@ export default function App() {
       ws.onopen = () => {
         setOnline(true)
         retry = 500
+        reconcile()
       }
       ws.onmessage = (m) => {
         const msg = JSON.parse(m.data)
@@ -162,7 +182,7 @@ export default function App() {
       clearTimeout(timer)
       ws && ws.close()
     }
-  }, [addEvent, addAck])
+  }, [addEvent, addAck, reconcile])
 
   useEffect(() => {
     let live = true
@@ -207,7 +227,7 @@ export default function App() {
           origin: body.origin.name,
           message: body.message,
           created_at: body.created_at,
-          deadline: new Date(new Date(body.created_at).getTime() + 10000).toISOString(),
+          deadline: body.deadline,
           expected: body.expected_recipients,
         })
         setText('')

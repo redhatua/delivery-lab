@@ -15,6 +15,11 @@ kubectl apply -f "$ROOT/infra/argocd/project.yaml" >/dev/null
 if ! kubectl -n argocd get app messenger >/dev/null 2>&1; then
   sed "s/@CHART_COMMIT@/$CHART_COMMIT/" "$ROOT/infra/argocd/application.yaml.tmpl" | kubectl apply -f - >/dev/null
 fi
+# an existing Application must match the lab definition and must not sync on its own yet
+app_contract_ok || die "the existing Argo Application differs from the lab definition; delete it (kubectl -n argocd delete app messenger) and rerun"
+if [[ "$PHASE" == jenkins && "$(app_json | jq -r '.spec.syncPolicy.automated // empty')" != "" ]]; then
+  die "the Argo Application has automated sync while Jenkins still owns deployment; delete it and rerun"
+fi
 kubectl -n argocd annotate app messenger argocd.argoproj.io/refresh=hard --overwrite >/dev/null
 
 say "waiting for Argo to compare"

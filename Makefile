@@ -23,11 +23,11 @@ host-bootstrap: ## Install host tools for libvirt/vagrant (uses sudo)
 
 up: ## Create the VMs and provision the whole platform
 	@cd infra && VAGRANT_DEFAULT_PROVIDER=libvirt vagrant up --provider libvirt
-	@cd infra/ansible && ansible-playbook site.yml
+	@scripts/provision.sh
 	@scripts/git-bootstrap.sh
 
 provision: ## Idempotent provisioning, respects the delivery phase
-	@cd infra/ansible && ansible-playbook site.yml
+	@scripts/provision.sh
 
 git-bootstrap: ## Create and seed the app and env repositories
 	@scripts/git-bootstrap.sh

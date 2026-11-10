@@ -12,7 +12,9 @@ Source of truth for behavior is the lab spec; this file fixes names only.
 ## Python
 
 Python 3.13 (uv-managed venv on host and in the Jenkins agent, python:3.13-slim in the image).
-Pinned requirements.txt (runtime) and requirements-dev.txt (pytest etc.).
+requirements.txt lists the direct runtime pins and requirements-dev.txt the test tools. requirements.lock is the
+full hash-locked runtime set the Dockerfile installs (`uv pip compile requirements.txt --python-version 3.13
+--generate-hashes -o requirements.lock`). Base images in the Dockerfile are pinned by digest.
 scripts/test.sh: starts a throwaway redis container on a free port (or uses REDIS_TEST_URL if set),
 creates .venv with uv, runs pytest, cleans up. Exit code is pytest's.
 

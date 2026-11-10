@@ -19,6 +19,7 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 take_lock() {
   exec 9>"$STATE/transition.lock"
   flock -n 9 || die "another lab command holds the transition lock"
+  export LAB_LOCK_HELD=1   # the playbook refuses to run without it
 }
 
 # Refuse to touch a cluster that is not this lab.
@@ -50,7 +51,20 @@ jenkins() {
   pw=$(cat "$SECRETS/jenkins-admin-password")
   crumb=$(curl -fsS -m 10 -c "$JJAR" -b "$JJAR" -u "admin:$pw" "$JENKINS/crumbIssuer/api/json" \
     | jq -r '.crumbRequestField + ":" + .crumb')
-  curl -gsS -m 30 -c "$JJAR" -b "$JJAR" -u "admin:$pw" -H "$crumb" -X "$method" "$JENKINS$path" "$@"
+  curl -fgsS -m 30 -c "$JJAR" -b "$JJAR" -u "admin:$pw" -H "$crumb" -X "$method" "$JENKINS$path" "$@"
+}
+
+# Prints "true"/"false": can this Jenkins job still be started?
+job_buildable() { jenkins GET "/job/$1/api/json?tree=buildable" | jq -r '.buildable'; }
+
+# The existing Argo Application must match what this lab would create. Compares
+# project, sources (repos, revisions, paths, values ref) and destination.
+app_contract_ok() {
+  local want
+  want=$(sed "s/@CHART_COMMIT@/$CHART_COMMIT/" "$ROOT/infra/argocd/application.yaml.tmpl" \
+    | kubectl create --dry-run=client -f - -o json \
+    | jq -S '{project: .spec.project, sources: .spec.sources, destination: .spec.destination}')
+  [[ "$(app_json | jq -S '{project: .spec.project, sources: .spec.sources, destination: .spec.destination}')" == "$want" ]]
 }
 
 # Snapshot of the live application: identities, selectors, template hash, digest.

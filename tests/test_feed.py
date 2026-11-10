@@ -76,3 +76,52 @@ def test_websocket_sends_hello(prefix):
         hello = ws.receive_json()
     assert hello["type"] == "hello"
     assert hello["served_by"]["pod_name"] == "messenger-0"
+
+
+async def test_feed_reads_ack_position_before_event_position(prefix):
+    from messenger.store import Store
+
+    calls = []
+
+    class FakeRedis:
+        async def xrevrange(self, key, count):
+            calls.append(key)
+            return []
+
+    store = Store(fast_settings(prefix, "messenger-0"))
+    store.r = FakeRedis()
+    await store.last_ids()
+    assert calls == [store.acks_key, store.events_key]
+
+
+async def test_websocket_limit_holds_under_parallel_handshakes(prefix, redis):
+    app = create_app(fast_settings(prefix, "messenger-0"))
+    accepted, refused = [], []
+
+    async def one():
+        inbox = asyncio.Queue()
+        await inbox.put({"type": "websocket.connect"})
+
+        async def receive():
+            await asyncio.sleep(0)  # a real socket yields here, which is where the race was
+            return await inbox.get()
+
+        async def send(msg):
+            if msg["type"] == "websocket.accept":
+                accepted.append(1)
+            if msg["type"] == "websocket.close":
+                refused.append(msg.get("code"))
+
+        scope = {"type": "websocket", "path": "/ws", "raw_path": b"/ws", "headers": [],
+                 "query_string": b"", "scheme": "ws", "root_path": "", "subprotocols": [],
+                 "server": ("test", 80), "client": ("test", 1)}
+        await app(scope, receive, send)
+
+    async with app.router.lifespan_context(app):
+        tasks = [asyncio.create_task(one()) for _ in range(12)]
+        await asyncio.sleep(1.0)
+        assert len(accepted) == 8
+        assert refused == [1013] * 4
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)

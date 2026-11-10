@@ -46,8 +46,8 @@ class Member:
             if self.ready:
                 attempt = 0
             self.ready = False
-            delay = min(self.s.backoff_max, self.s.backoff_base * 2**attempt)
-            attempt += 1
+            delay = min(self.s.backoff_max, self.s.backoff_base * 2 ** min(attempt, 16))
+            attempt = min(attempt + 1, 16)
             await asyncio.sleep(delay * random.uniform(0.5, 1.0))
 
     async def _session(self) -> None:

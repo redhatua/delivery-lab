@@ -219,3 +219,22 @@ async def test_group_cursor_survives_a_restart(cluster, redis, prefix):
     after = cursor(await redis.xinfo_groups(f"{prefix}:events"))
     assert after["receiver:messenger-1"] == before["receiver:messenger-1"]
     assert await redis.xlen(f"{prefix}:acks") == 1  # nothing replayed
+
+
+async def test_post_response_carries_the_stored_deadline(cluster):
+    nodes = await make_group(cluster, 2)
+    resp = (await nodes[0].broadcast("deadline")).json()
+    body = await status_of(nodes[0], resp["event_id"])
+    assert resp["deadline"] == body["deadline"]
+
+
+async def test_failed_ack_write_leaves_no_partial_result(cluster, redis):
+    nodes = await make_group(cluster, 2)
+    acks_key = f"{cluster.prefix}:acks"
+    await redis.set(acks_key, "not a stream")  # the ACK stream write will be rejected
+    event_id = (await nodes[0].broadcast("broken audit stream")).json()["event_id"]
+    await asyncio.sleep(1.5)
+    assert await redis.hget(f"{cluster.prefix}:event:{event_id}", "ack:messenger-1") is None
+    await redis.delete(acks_key)  # repaired: the retry now records the ACK in both places
+    await wait_status(nodes[0], event_id, "complete", timeout=15)
+    assert await redis.xlen(acks_key) == 1

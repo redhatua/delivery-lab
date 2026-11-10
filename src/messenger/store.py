@@ -60,9 +60,11 @@ local field = 'ack:' .. ARGV[1]
 if redis.call('HEXISTS', KEYS[1], field) == 1 then return finish('duplicate') end
 local t = redis.call('TIME')
 local now = string.format('%d', t[1] * 1000 + math.floor(t[2] / 1000))
-redis.call('HSET', KEYS[1], field, cjson.encode({uid = ARGV[2], ip = ARGV[3], at_ms = now}))
+-- The stream write goes first: it is the only step that can fail here (the hash
+-- was already read above). If it raises, no half-written ACK is left behind.
 redis.call('XADD', KEYS[2], '*',
   'event_id', ARGV[6], 'member', ARGV[1], 'uid', ARGV[2], 'ip', ARGV[3], 'at_ms', now)
+redis.call('HSET', KEYS[1], field, cjson.encode({uid = ARGV[2], ip = ARGV[3], at_ms = now}))
 return finish('acked')
 """
 
@@ -205,8 +207,10 @@ class Store:
 
     async def last_ids(self) -> dict[str, str]:
         """Newest entry id of each stream, so a feed can start from 'now'."""
+        # Acks are read first. An event published after the later events snapshot
+        # then has all of its acks after the earlier acks snapshot, so none is skipped.
         out = {}
-        for key in (self.events_key, self.acks_key):
+        for key in (self.acks_key, self.events_key):
             last = await self.r.xrevrange(key, count=1)
             out[key] = last[0][0] if last else "0-0"
         return out

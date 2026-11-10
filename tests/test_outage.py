@@ -77,3 +77,25 @@ async def test_outage_keeps_live_drops_ready_and_keeps_groups(redis, prefix):
         await proxy.cut()
         async for key in redis.scan_iter(f"{prefix}:*"):
             await redis.delete(key)
+
+
+async def test_supervisor_survives_a_very_long_outage(prefix):
+    from messenger.consumer import Member
+    from messenger.store import Store
+
+    s = fast_settings(prefix, "messenger-0", backoff_base=0.1, backoff_max=0.0)
+    member = Member(s, Store(s))
+    failures = 0
+
+    async def broken():
+        nonlocal failures
+        failures += 1
+        raise ConnectionError("redis is gone")
+
+    member._session = broken
+    task = asyncio.create_task(member.run())
+    while failures < 1200:  # an uncapped 2**attempt overflows a float near attempt 1024
+        await asyncio.sleep(0.01)
+        assert not task.done(), task.exception() if task.done() else None
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)

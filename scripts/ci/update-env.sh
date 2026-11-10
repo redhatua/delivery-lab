@@ -18,10 +18,15 @@ if git diff --quiet; then
   echo "env already at ${DIGEST}"
 else
   git commit -q -am "release ${VERSION}: ${DIGEST:0:19} (source ${SOURCE_SHA:0:8})"
+  pushed=
   for i in 1 2 3; do
-    git push -q origin HEAD:main && break
-    git pull -q --rebase origin main
+    if git push -q origin HEAD:main; then pushed=1; break; fi
+    git pull -q --rebase origin main || true
   done
+  [[ -n "$pushed" ]] || { echo "could not push the release commit to env/main" >&2; exit 1; }
+  # what we record must really be on the remote branch
+  git fetch -q origin main
+  git merge-base --is-ancestor HEAD FETCH_HEAD || { echo "release commit is not on env/main" >&2; exit 1; }
 fi
 git rev-parse HEAD > ../env_commit
 echo "env commit $(cat ../env_commit)"

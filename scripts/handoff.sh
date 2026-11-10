@@ -6,21 +6,54 @@ source "$(dirname "$0")/lib.sh"
 take_lock
 check_lab_cluster
 PHASE=$(get_phase)
-if [[ "$PHASE" == argocd ]]; then say "already in phase argocd, nothing to do"; exit 0; fi
 CHART_COMMIT=$(cat "$STATE/chart-commit")
 set_phase() { kubectl -n lab-system patch cm lab-control --type merge -p "{\"data\":{\"phase\":\"$1\"}}" >/dev/null; }
+REVOKED=no
 fail() { echo; echo "handoff stopped: $*" >&2
-  echo "phase stays 'handoff'; Jenkins deploy access stays revoked. Fix the cause and rerun: make handoff" >&2; exit 1; }
+  if [[ "$REVOKED" == yes ]]; then
+    echo "phase stays 'handoff'; Jenkins deploy access is revoked. Fix the cause and rerun: make handoff" >&2
+  else
+    echo "phase stays 'handoff'; legacy job is disabled, Jenkins deploy access is not revoked yet. Fix the cause and rerun: make handoff" >&2
+  fi
+  exit 1; }
 provision_jenkins() { (cd "$ROOT/infra/ansible" && ansible-playbook site.yml --tags always,jenkins | tail -3); }
 
+# Final state: Argo owns deployment, so the legacy job is off and the gitops job is on.
+verify_final() {
+  for _ in $(seq 1 30); do
+    [[ "$(job_buildable messenger-gitops 2>/dev/null)" == true && "$(job_buildable messenger-legacy 2>/dev/null)" == false ]] && return 0
+    sleep 2
+  done
+  return 1
+}
+
+if [[ "$PHASE" == argocd ]]; then
+  # a previous run may have stopped after the phase flipped but before the jobs were switched
+  if ! verify_final; then
+    say "phase is argocd but the jobs are not in their final state; reprovisioning Jenkins"
+    provision_jenkins
+    verify_final || fail "gitops job is not enabled or legacy job is still enabled"
+  fi
+  say "already in phase argocd, jobs are in their final state"
+  exit 0
+fi
+
 kubectl -n argocd get app messenger >/dev/null 2>&1 || die "run make handoff-plan first"
+app_contract_ok || die "the Argo Application differs from the lab definition (sources, revisions or destination); delete it and rerun make handoff-plan"
+[[ "$(cat "$ENVDIR/environments/lab/chart-commit.txt")" == "$CHART_COMMIT" ]] || die "env chart-commit differs from the recorded CHART_COMMIT"
 
 # 1. persist the phase before touching anything
 set_phase handoff
 say "phase is now handoff"
 
 #    stop every legacy writer: disable, cancel queue, abort running builds
-jenkins POST /job/messenger-legacy/disable >/dev/null || true
+legacy_state() {  # prints "<buildable> <queued> <running>"
+  local q r
+  q=$(jenkins GET '/queue/api/json' | jq '[.items[]|select(.task.name=="messenger-legacy")]|length')
+  r=$(jenkins GET '/job/messenger-legacy/api/json?tree=builds[building]' | jq '[.builds[]|select(.building)]|length')
+  echo "$(job_buildable messenger-legacy) $q $r"
+}
+jenkins POST /job/messenger-legacy/disable >/dev/null || fail "could not disable the legacy job"
 for id in $(jenkins GET '/queue/api/json' | jq -r '.items[]|select(.task.name=="messenger-legacy")|.id'); do
   jenkins POST "/queue/cancelItem?id=$id" >/dev/null || true
 done
@@ -28,13 +61,15 @@ for n in $(jenkins GET '/job/messenger-legacy/api/json?tree=builds[number,buildi
   say "aborting legacy build #$n"
   jenkins POST "/job/messenger-legacy/$n/stop" >/dev/null || true
 done
-for _ in $(seq 1 30); do
-  running=$(jenkins GET '/job/messenger-legacy/api/json?tree=builds[building]' | jq '[.builds[]|select(.building)]|length')
-  [[ "$running" == 0 ]] && break
+# the job must be disabled and nothing queued or running, seen on three checks in a row
+calm=0
+for _ in $(seq 1 45); do
+  if [[ "$(legacy_state)" == "false 0 0" ]]; then calm=$((calm + 1)); else calm=0; fi
+  [[ $calm -ge 3 ]] && break
   sleep 2
 done
-[[ "$running" == 0 ]] || fail "legacy builds still running"
-say "no legacy builds running or queued"
+[[ $calm -ge 3 ]] || fail "legacy job is not disabled and idle ($(legacy_state))"
+say "legacy job disabled, nothing running or queued"
 
 # 2. stable baseline: nothing can change chart, env or live state now
 ENV_COMMIT=$(env_sync)
@@ -46,6 +81,7 @@ say "baseline: chart ${CHART_COMMIT:0:12} env ${ENV_COMMIT:0:12} digest ${LIVE_D
 
 # 3. revoke the Jenkins deploy identity, drop its credential, prove it is denied
 kubectl -n demo delete rolebinding jenkins-deployer --ignore-not-found >/dev/null
+REVOKED=yes
 provision_jenkins
 # a fresh, valid token for the former identity, in a token-only kubeconfig, so a
 # denial cannot be an expired token and admin credentials cannot leak into the check
@@ -94,4 +130,5 @@ say "automated sync with self-heal enabled, prune off"
 # 7. record the new owner and enable the gitops job
 set_phase argocd
 provision_jenkins
+verify_final || fail "phase is argocd but the gitops job is not enabled or the legacy job is still enabled; rerun make handoff"
 say "handoff complete: phase argocd"

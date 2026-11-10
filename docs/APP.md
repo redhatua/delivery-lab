@@ -52,7 +52,7 @@ typing indicator for recipients that have not answered yet.
 - Recipients wait a random `REPLY_DELAY_MIN`..`REPLY_DELAY_MAX` seconds (default 1 to 4)
   before the ACK, to look like people answering. Keep the maximum below `RECLAIM_MIN_IDLE`.
   Set both to 0 to disable. Tests run with 0.
-- uvicorn needs the `websockets` package to serve `/ws`; it is pinned in requirements.txt.
+- uvicorn needs the `websockets` package to serve `/ws`; it is pinned in requirements.txt and locked in requirements.lock.
 - Local UI development: `scripts/run-local.sh 3`, then `cd ui && npm install && npm run dev`.
 
 ## Test hook

@@ -6,6 +6,10 @@
   gather_facts: false
   tags: [always]
   tasks:
+    - name: Provisioning must run under the transition lock (make up / make provision)
+      ansible.builtin.assert:
+        that: lookup('env', 'LAB_LOCK_HELD') == '1'
+        fail_msg: "run provisioning through make so it holds the transition lock"
     - ansible.builtin.file:
         path: "{{ secrets_dir }}"
         state: directory
@@ -23,7 +27,9 @@
       environment: "{{ kc_env }}"
       register: cur_phase
       changed_when: false
-      failed_when: false
+      failed_when:
+        - cur_phase.rc != 0
+        - "'not found' not in cur_phase.stderr"
       when: kc_stat.stat.exists
     - name: Repositories seeded?
       ansible.builtin.stat:

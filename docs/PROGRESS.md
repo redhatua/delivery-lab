@@ -104,3 +104,28 @@ the GitOps path as v2. The first version failed in the browser on plain http bec
 `crypto.randomUUID` is unavailable in insecure contexts; v3 has a fallback. Unit tests did not
 cover this, only a real browser did. Verified: 33 tests, websocket through Traefik, v3
 reconciled by Argo, smoke passed, button works in a browser.
+
+## Deviation from the written spec
+
+The spec rules out a frontend framework and a build pipeline for the optional page. The chat page was
+requested later by the owner and uses React and Vite, built inside the Docker image. The CLI acceptance
+gates do not depend on it.
+
+## Review fixes
+
+An independent read-only review of the repository (gpt-6-astra) led to these changes:
+
+- Consumer supervisor: the backoff exponent is capped, so a very long Redis outage no longer ends the supervisor.
+- Provisioning: `make up` and `make provision` run under the transition lock (`scripts/provision.sh`); the
+  playbook refuses to run without it and stops if the delivery phase cannot be read from an existing cluster.
+- Handoff: the legacy job must be reported disabled with nothing queued or running on three checks in a row;
+  Jenkins API errors are no longer ignored; the Argo Application is compared with the lab definition before
+  planning and before sync; a rerun in phase `argocd` verifies the final job state and repairs it.
+- `update-env.sh` fails when the push does not succeed and checks the recorded commit is on `env/main`.
+- ACK script writes the stream entry before the result field, so a failed write leaves nothing behind.
+- Live feed: the cursors are taken acks first, the websocket limit is reserved before the handshake, the
+  page re-reads replies from the status API after a reconnect, and uses the deadline stored in Redis.
+- Build: base images pinned by digest, runtime dependencies hash-locked.
+
+Five regression tests cover the app-side items and fail on the previous code. The shell and Ansible changes
+were exercised on a rebuilt lab (see below).

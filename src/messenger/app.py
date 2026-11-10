@@ -109,7 +109,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return JSONResponse({"error": "expired"}, status_code=409)
         replayed = status == "replayed"
         return JSONResponse({**event_view(ev), "expected_count": len(ev["expected"]),
-                             "replayed": replayed}, status_code=200 if replayed else 202)
+                             "deadline": iso(ev["deadline_ms"]), "replayed": replayed},
+                            status_code=200 if replayed else 202)
 
     @app.get("/broadcasts/{event_id}")
     async def broadcast_status(event_id: str, request: Request) -> dict:
@@ -139,14 +140,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def ws_feed(ws: WebSocket) -> None:
         """Pushes new broadcasts and acknowledgments to a browser as they happen."""
         store: Store = ws.app.state.store
+        # The slot is taken before the first await so parallel handshakes cannot
+        # all pass the check.
         if getattr(ws.app.state, "feeds", 0) >= MAX_FEEDS:
             await ws.close(code=1013)
             return
-        await ws.accept()
         ws.app.state.feeds = getattr(ws.app.state, "feeds", 0) + 1
-        # a pending receive lets us notice the browser going away
-        closed = asyncio.ensure_future(ws.receive())
+        closed = None
         try:
+            await ws.accept()
+            # a pending receive lets us notice the browser going away
+            closed = asyncio.ensure_future(ws.receive())
             await ws.send_json({"type": "hello", "served_by": identity()})
             idle = 0
             async for msg in feed(store):
@@ -161,7 +165,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except (WebSocketDisconnect, RedisError, OSError, TimeoutError, RuntimeError):
             pass
         finally:
-            closed.cancel()
+            if closed:
+                closed.cancel()
             ws.app.state.feeds -= 1
             try:
                 await ws.close()
