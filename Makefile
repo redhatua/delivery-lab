@@ -8,7 +8,7 @@ REPLICAS ?=
 .DEFAULT_GOAL := help
 .PHONY: help doctor host-bootstrap up provision git-bootstrap test status urls legacy-release \
 	broadcast broadcast-status smoke handoff-plan handoff gitops-release drift-demo rollback \
-	recovery-demo scale redis-info collect-evidence halt destroy argo-ui refresh-deploy-token
+	recovery-demo scale redis-info collect-evidence halt destroy argo-ui forward refresh-deploy-token
 
 help: ## List targets and parameters
 	@echo "Targets:"
@@ -22,7 +22,7 @@ host-bootstrap: ## Install host tools for libvirt/vagrant (uses sudo)
 	@scripts/host-bootstrap.sh
 
 up: ## Create the VMs and provision the whole platform
-	@cd infra && VAGRANT_DEFAULT_PROVIDER=libvirt vagrant up --provider libvirt
+	@scripts/vagrant.sh up
 	@scripts/provision.sh
 	@scripts/git-bootstrap.sh
 
@@ -84,6 +84,9 @@ redis-info: ## Group cursors, lag, pending and stream samples
 collect-evidence: ## Write sanitized evidence under docs/evidence
 	@scripts/collect-evidence.sh
 
+forward: ## Forward app, Jenkins and Gitea to localhost (for Windows browsers with WSL2)
+	@scripts/forward.sh
+
 argo-ui: ## Port-forward Argo CD on 127.0.0.1:8443
 	@scripts/argo-ui.sh
 
@@ -91,10 +94,10 @@ refresh-deploy-token: ## New Jenkins deploy token (only while phase is jenkins)
 	@scripts/refresh-deploy-token.sh
 
 halt: ## Stop only these VMs
-	@cd infra && VAGRANT_DEFAULT_PROVIDER=libvirt vagrant halt
+	@scripts/vagrant.sh halt
 
 destroy: ## Destroy this lab: make destroy CONFIRM=lab
 	@test "$(CONFIRM)" = lab || { echo "refusing: run make destroy CONFIRM=lab"; exit 2; }
-	@cd infra && VAGRANT_DEFAULT_PROVIDER=libvirt vagrant destroy -f
+	@scripts/vagrant.sh destroy -f
 	@rm -rf .lab/secrets .lab/state .lab/worktrees .lab/kubeconfig .lab/kubeconfig.argocd .lab/evidence
 	@echo "lab destroyed (box cache and .lab/bin kept)"

@@ -7,7 +7,8 @@ take_lock
 check_lab_cluster
 [[ "$(get_phase)" == argocd ]] || die "scaling through Git needs phase argocd"
 env_sync >/dev/null
-sed -i "s/^replicaCount:.*/replicaCount: $N/" "$ENVDIR/environments/lab/values.yaml"
+f="$ENVDIR/environments/lab/values.yaml"
+sed "s/^replicaCount:.*/replicaCount: $N/" "$f" > "$f.new" && mv "$f.new" "$f"
 git -C "$ENVDIR" -c user.name=lab -c user.email=lab@lab.invalid commit -qam "scale to $N replicas" || die "replicaCount already $N"
 git_writer -C "$ENVDIR" push -q "$GITEA/lab/env.git" HEAD:main
 new=$(git -C "$ENVDIR" rev-parse HEAD)

@@ -1,7 +1,20 @@
 # Single place for lab sizing, addresses and version pins.
 lab_name: delivery-lab
-box: cloud-image/ubuntu-24.04
-box_version: "20260926.0.0"
+# One box per VM provider. The bento box has amd64 and arm64 builds; Vagrant picks the one
+# that matches the host.
+boxes:
+  libvirt:
+    name: cloud-image/ubuntu-24.04
+    version: "20260926.0.0"
+  virtualbox:
+    name: bento/ubuntu-24.04
+    version: "202510.26.0"
+  vmware_desktop:
+    name: bento/ubuntu-24.04
+    version: "202510.26.0"
+  parallels:
+    name: bento/ubuntu-24.04
+    version: "202510.26.0"
 network:
   name: delivery-lab-net
   cidr: 192.168.77.0/24

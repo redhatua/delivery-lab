@@ -10,13 +10,20 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends git curl ca-certificates python3 jq make \
  && rm -rf /var/lib/apt/lists/*
 # Docker CLI only; the daemon is the one on the services VM, reached through its socket.
-RUN curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz \
-    | tar -xz --strip-components=1 -C /usr/local/bin docker/docker
-RUN curl -fsSL -o /usr/local/bin/kubectl https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl \
- && chmod +x /usr/local/bin/kubectl
-RUN curl -fsSL https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz \
-    | tar -xz --strip-components=1 -C /usr/local/bin linux-amd64/helm
-RUN curl -fsSL https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz \
-    | tar -xz --strip-components=1 -C /usr/local/bin
+# The download names differ per CPU (amd64 builds on Intel/AMD, arm64 on Apple Silicon VMs).
+RUN set -eu; \
+    case "$(uname -m)" in \
+      x86_64) go=amd64; gnu=x86_64 ;; \
+      aarch64|arm64) go=arm64; gnu=aarch64 ;; \
+      *) echo "unsupported cpu $(uname -m)" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL https://download.docker.com/linux/static/stable/${gnu}/docker-${DOCKER_VERSION}.tgz \
+      | tar -xz --strip-components=1 -C /usr/local/bin docker/docker; \
+    curl -fsSL -o /usr/local/bin/kubectl https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${go}/kubectl; \
+    chmod +x /usr/local/bin/kubectl; \
+    curl -fsSL https://get.helm.sh/helm-${HELM_VERSION}-linux-${go}.tar.gz \
+      | tar -xz --strip-components=1 -C /usr/local/bin linux-${go}/helm; \
+    curl -fsSL https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${gnu}-unknown-linux-gnu.tar.gz \
+      | tar -xz --strip-components=1 -C /usr/local/bin
 # sshd sessions read /etc/group, so the socket's gid has to be a real group here.
 RUN groupadd -g ${DOCKER_GID} dockerhost && usermod -aG dockerhost jenkins

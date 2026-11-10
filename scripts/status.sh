@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib.sh"
 echo "VMs"
-(cd "$ROOT/infra" && VAGRANT_DEFAULT_PROVIDER=libvirt vagrant status 2>/dev/null | grep -E 'services|k3s' | grep -E 'running|shutoff|not created' | sed 's/^/  /')
+("$ROOT/scripts/vagrant.sh" status 2>/dev/null | grep -E 'services|k3s' | grep -E 'running|shutoff|not created' | sed 's/^/  /')
 [[ -f "$KUBECONFIG" ]] || exit 0
 echo "delivery phase: $(get_phase)"
 echo "jenkins agent:  $(jenkins GET /computer/agent-1/api/json 2>/dev/null | jq -r 'if .offline then "offline" else "online" end' 2>/dev/null || echo unreachable)"
