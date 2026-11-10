@@ -37,6 +37,38 @@ Then the ownership transfer:
 `make help` lists everything. Credentials and kubeconfigs are generated into `.lab/`
 (ignored by Git). Only the lab kubeconfig is used; the default one is never touched.
 
+## Access
+
+`make urls` prints these. Passwords are generated into `.lab/secrets/` (not in Git).
+
+| What | Where | Login |
+| --- | --- | --- |
+| Jenkins | http://192.168.77.10:8080 | user `admin`, password in `.lab/secrets/jenkins-admin-password` |
+| Gitea | http://192.168.77.10:3000 | user `lab`, password in `.lab/secrets/gitea-admin-password` |
+| Argo CD | http://127.0.0.1:8443 after `make argo-ui` (keep it running) | user `admin`, password in `.lab/secrets/argocd-admin-password` |
+| Application | http://192.168.77.20:30080/identity | none |
+| Registry | http://192.168.77.10:5000/v2/_catalog | none |
+
+Show a password without printing it into history: `cat .lab/secrets/jenkins-admin-password`.
+
+Kubernetes uses a dedicated kubeconfig; the default one is untouched:
+
+    export KUBECONFIG=$PWD/.lab/kubeconfig
+    kubectl get nodes
+    kubectl -n demo get pods
+    kubectl -n argocd get app messenger
+
+Or per command: `kubectl --kubeconfig .lab/kubeconfig -n demo get pods`.
+
+The VMs accept SSH with the Vagrant key:
+
+    cd infra && vagrant ssh services     # or: vagrant ssh k3s
+
+Argo CD CLI (core mode, no login needed) is downloaded to `.lab/bin/argocd` on first use
+by `make handoff-plan`; run it through the lab kubeconfig, for example
+`.lab/bin/argocd --core app get messenger` after
+`kubectl config set-context --current --namespace=argocd`.
+
 ## Layout
 
 | Path | Content |
