@@ -27,12 +27,11 @@ services:
         KUBECTL_VERSION: "{{ cfg.versions.kubectl }}"
         HELM_VERSION: "{{ cfg.versions.helm }}"
         UV_VERSION: "0.11.3"
+        DOCKER_GID: "{{ docker_gid }}"
     image: lab/jenkins-agent:{{ cfg.versions.jenkins_ssh_agent }}
     container_name: jenkins-agent
     restart: unless-stopped
     hostname: agent
-    group_add:
-      - "{{ docker_gid }}"
     environment:
       JENKINS_AGENT_SSH_PUBKEY: "{{ agent_pubkey }}"
     volumes:

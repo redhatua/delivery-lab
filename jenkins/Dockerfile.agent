@@ -4,6 +4,7 @@ ARG DOCKER_VERSION
 ARG KUBECTL_VERSION
 ARG HELM_VERSION
 ARG UV_VERSION
+ARG DOCKER_GID
 USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git curl ca-certificates python3 jq make \
@@ -17,3 +18,5 @@ RUN curl -fsSL https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz \
     | tar -xz --strip-components=1 -C /usr/local/bin linux-amd64/helm
 RUN curl -fsSL https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz \
     | tar -xz --strip-components=1 -C /usr/local/bin
+# sshd sessions read /etc/group, so the socket's gid has to be a real group here.
+RUN groupadd -g ${DOCKER_GID} dockerhost && usermod -aG dockerhost jenkins
