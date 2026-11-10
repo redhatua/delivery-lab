@@ -98,3 +98,25 @@ argocd_cli() {
   KUBECONFIG="$kc" kubectl config set-context --current --namespace=argocd >/dev/null
   KUBECONFIG="$kc" "$bin" --core "$@"
 }
+
+# Success of the Jenkins job only means the commit landed. The workload has to
+# actually converge on that env revision and image digest before we say so.
+wait_for_argo() {
+  local env_commit="$1" digest="$2" version="$3"
+  say "waiting for argo to reconcile env ${env_commit:0:12} and ${digest:0:19}"
+  kubectl -n argocd annotate app messenger argocd.argoproj.io/refresh=hard --overwrite >/dev/null
+  for _ in $(seq 1 100); do
+    st=$(app_json | jq -r '"\(.status.sync.revisions[1] // "")|\(.status.sync.status)|\(.status.health.status)|\(.status.operationState.phase // "")"')
+    live=$(kubectl -n demo get sts messenger -o jsonpath='{.spec.template.spec.containers[0].image}' | cut -d@ -f2)
+    ready=$(kubectl -n demo get sts messenger -o jsonpath='{.status.updatedReplicas}/{.status.readyReplicas}/{.spec.replicas}')
+    if [[ "$st" == "$env_commit|Synced|Healthy|Succeeded" && "$live" == "$digest" ]]; then
+      r=(${ready//\// }); [[ "${r[0]}" == "${r[2]}" && "${r[1]}" == "${r[2]}" ]] && break
+    fi
+    sleep 5
+  done
+  [[ "$st" == "$env_commit|Synced|Healthy|Succeeded" && "$live" == "$digest" ]] || die "argo did not converge: $st live=${live:0:19} ready=$ready"
+  "$ROOT/scripts/smoke.sh" "$APP_URL" "$(env_replicas)"
+  curl -fsS -m 5 "$APP_URL/identity" | jq -c '{version, source_sha}'
+  say "argo reconciled env ${env_commit:0:12}, image ${digest:0:19}"
+}
+
