@@ -58,4 +58,4 @@ for _ in $(seq 1 15); do
   sleep 1
 done
 [[ "$p" == 0 ]] || die "pending list not drained"
-say "pending list is empty; messenger-1 was recovered by a new incarnation (expected status: complete_late)"
+say "pending list is empty; messenger-1 was recovered by a new incarnation (status is complete, or complete_late if the 10s deadline passed first)"
