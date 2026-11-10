@@ -52,3 +52,33 @@ jenkins() {
     | jq -r '.crumbRequestField + ":" + .crumb')
   curl -gsS -m 30 -c "$JJAR" -b "$JJAR" -u "admin:$pw" -H "$crumb" -X "$method" "$JENKINS$path" "$@"
 }
+
+# Snapshot of the live application: identities, selectors, template hash, digest.
+# Used as the adoption baseline and to compare after the first Argo sync.
+live_baseline() {
+  local out pods
+  out=$(kubectl -n demo get statefulset,svc,ingress,configmap -l app.kubernetes.io/instance=messenger -o json)
+  pods=$(kubectl -n demo get pods -l app.kubernetes.io/instance=messenger -o json)
+  # hash the template locally; jq has no sha256
+  local tpl
+  tpl=$(echo "$out" | jq -c '.items[]|select(.kind=="StatefulSet")|.spec.template' | sha256sum | cut -d' ' -f1)
+  jq -n --argjson o "$out" --argjson p "$pods" --arg tpl "$tpl" '
+    {
+      resources: ($o.items | map({key: (.kind + "/" + .metadata.name), value: .metadata.uid}) | from_entries),
+      selector: ($o.items | map(select(.kind=="StatefulSet"))[0].spec.selector.matchLabels),
+      template_sha256: $tpl,
+      image: ($o.items | map(select(.kind=="StatefulSet"))[0].spec.template.spec.containers[0].image),
+      replicas: ($o.items | map(select(.kind=="StatefulSet"))[0].spec.replicas),
+      pods: ($p.items | map({key: .metadata.name, value: .metadata.uid}) | from_entries)
+    }'
+}
+
+ENVDIR="$LAB/worktrees/env"
+# Fast-forwards the local env working copy and prints its HEAD commit.
+env_sync() {
+  git_reader -C "$ENVDIR" pull -q --ff-only "$GITEA/lab/env.git" main
+  git -C "$ENVDIR" rev-parse HEAD
+}
+env_digest() { awk '/^  digest:/{print $2}' "$ENVDIR/environments/lab/values.yaml"; }
+env_replicas() { awk '/^replicaCount:/{print $2}' "$ENVDIR/environments/lab/values.yaml"; }
+app_json() { kubectl -n argocd get app messenger -o json; }

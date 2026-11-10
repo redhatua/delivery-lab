@@ -1,0 +1,21 @@
+# Scope of what Argo may do for this lab: two repositories, one namespace,
+# only the kinds the chart renders. Cluster-scoped resources are not allowed.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: lab
+  namespace: argocd
+spec:
+  description: delivery lab
+  sourceRepos:
+    - http://192.168.77.10:3000/lab/app.git
+    - http://192.168.77.10:3000/lab/env.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: demo
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: apps, kind: StatefulSet}
+    - {group: "", kind: Service}
+    - {group: "", kind: ConfigMap}
+    - {group: networking.k8s.io, kind: Ingress}

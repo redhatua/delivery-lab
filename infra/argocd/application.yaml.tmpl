@@ -1,0 +1,23 @@
+# Two sources: the pinned chart, and the env repo exposed as $values.
+# Automatic sync is off here; handoff turns it on after adoption is verified.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: messenger
+  namespace: argocd
+spec:
+  project: lab
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  sources:
+    - repoURL: http://192.168.77.10:3000/lab/app.git
+      targetRevision: @CHART_COMMIT@
+      path: helm/messenger
+      helm:
+        releaseName: messenger
+        valueFiles:
+          - $values/environments/lab/values.yaml
+    - repoURL: http://192.168.77.10:3000/lab/env.git
+      targetRevision: main
+      ref: values
