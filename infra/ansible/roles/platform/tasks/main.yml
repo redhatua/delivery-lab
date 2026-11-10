@@ -24,6 +24,7 @@
 - name: Remember phase
   ansible.builtin.set_fact:
     phase: "{{ phase_out.stdout }}"
+    cacheable: false
 
 - name: Show phase
   ansible.builtin.debug:

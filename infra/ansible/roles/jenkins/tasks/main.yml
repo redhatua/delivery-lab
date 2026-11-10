@@ -76,7 +76,7 @@
   become: true
 
 - name: Docker group id on the VM
-  ansible.builtin.shell: getent group docker | cut -d: -f3
+  ansible.builtin.shell: "getent group docker | cut -d: -f3"
   register: dgid
   changed_when: false
 

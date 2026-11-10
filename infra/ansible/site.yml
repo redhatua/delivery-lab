@@ -1,27 +1,64 @@
-- name: Local secrets directory
+# Idempotent. Reads the delivery phase first and never restores a revoked deploy
+# binding or re-enables the legacy job after handoff.
+- name: Delivery state
   hosts: localhost
   connection: local
   gather_facts: false
+  tags: [always]
   tasks:
     - ansible.builtin.file:
         path: "{{ secrets_dir }}"
         state: directory
         mode: "0700"
+    - ansible.builtin.file:
+        path: "{{ lab_dir }}/state"
+        state: directory
+        mode: "0700"
+    - name: Existing kubeconfig?
+      ansible.builtin.stat:
+        path: "{{ kubeconfig_admin }}"
+      register: kc_stat
+    - name: Phase from the control record (jenkins before the cluster exists)
+      ansible.builtin.command: kubectl -n lab-system get cm lab-control -o jsonpath={.data.phase}
+      environment: "{{ kc_env }}"
+      register: cur_phase
+      changed_when: false
+      failed_when: false
+      when: kc_stat.stat.exists
+    - name: Repositories seeded?
+      ansible.builtin.stat:
+        path: "{{ lab_dir }}/state/repos-ready"
+      register: rr
+    - ansible.builtin.set_fact:
+        phase: "{{ (cur_phase.stdout | default('')) if (cur_phase.stdout | default('')) | length > 0 else 'jenkins' }}"
+        repos_ready: "{{ rr.stat.exists }}"
 
 - name: Base
   hosts: all
   roles: [common]
+  tags: [base]
 
 - name: Services VM
-  hosts: services
+  hosts: services_group
   roles: [services]
+  tags: [services]
 
 - name: k3s VM
-  hosts: k3s
+  hosts: k3s_group
   roles: [k3s]
+  tags: [k3s]
 
 - name: Platform on k3s
   hosts: localhost
   connection: local
   gather_facts: false
   roles: [platform]
+  tags: [platform]
+
+- name: Jenkins and build agent
+  hosts: services_group
+  vars:
+    phase: "{{ hostvars['localhost'].phase }}"
+    repos_ready: "{{ hostvars['localhost'].repos_ready }}"
+  roles: [jenkins]
+  tags: [jenkins]

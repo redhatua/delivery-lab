@@ -1,0 +1,67 @@
+// Imperative delivery: build, publish, record the digest in env, then helm upgrade.
+pipeline {
+  agent { label 'build' }
+  options {
+    disableConcurrentBuilds()
+    timeout(time: 30, unit: 'MINUTES')
+    timestamps()
+  }
+  parameters {
+    string(name: 'SOURCE_SHA', defaultValue: '', description: 'Exact source commit to build')
+    string(name: 'VERSION', defaultValue: '', description: 'Expected content of VERSION')
+  }
+  environment {
+    SOURCE_SHA = "${params.SOURCE_SHA}"
+  }
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+        sh '''
+          set -e
+          [ -n "$SOURCE_SHA" ] || { echo "SOURCE_SHA is required"; exit 1; }
+          if [ "$(git rev-parse HEAD)" != "$SOURCE_SHA" ]; then
+            git cat-file -e "$SOURCE_SHA^{commit}"
+            git checkout -q --detach "$SOURCE_SHA"
+          fi
+          [ "$(git rev-parse HEAD)" = "$SOURCE_SHA" ]
+          [ -z "$VERSION" ] || [ "$(cat VERSION)" = "$VERSION" ] || { echo "VERSION file is $(cat VERSION), wanted $VERSION"; exit 1; }
+          echo "building $(cat VERSION) at $SOURCE_SHA"
+        '''
+      }
+    }
+    stage('Tests') {
+      steps {
+        sh 'scripts/ci/test.sh'
+        sh 'helm lint helm/messenger -f helm/messenger/ci/lint-values.yaml'
+        sh 'helm template messenger helm/messenger -n demo -f helm/messenger/ci/lint-values.yaml > /dev/null'
+      }
+    }
+    stage('Image') {
+      steps { sh 'scripts/ci/build-push.sh' }
+    }
+    stage('Release values') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'gitea-writer', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
+          sh 'scripts/ci/update-env.sh'
+        }
+      }
+    }
+    stage('Deploy') {
+      steps {
+        withCredentials([file(credentialsId: 'deployer-kubeconfig', variable: 'KUBECONFIG')]) {
+          sh 'scripts/ci/deploy.sh'
+        }
+      }
+    }
+    stage('Smoke') {
+      steps { sh 'scripts/smoke.sh http://192.168.77.20:30080 3' }
+    }
+  }
+  post {
+    always {
+      sh 'scripts/ci/evidence.sh || true'
+      archiveArtifacts artifacts: '.ci/evidence.json', allowEmptyArchive: true
+    }
+  }
+}
