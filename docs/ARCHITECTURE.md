@@ -7,7 +7,7 @@
 | services | 192.168.77.10 | docker compose: Jenkins controller, SSH build agent, Gitea (SQLite), registry |
 | k3s | 192.168.77.20 | k3s server, Traefik (NodePort 30080), Argo CD, Redis, messenger |
 
-The VMs sit on a private libvirt network (NAT, not bridged to the LAN). Services bind to
+The VMs sit on a private host-only network (libvirt on Linux; see PLATFORMS.md for other hosts) (NAT, not bridged to the LAN). Services bind to
 the lab address only. The registry speaks plain HTTP; Docker on `services` and containerd
 on `k3s` are both told so explicitly. That is acceptable for a disposable lab and not for
 anything else.

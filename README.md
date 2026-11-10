@@ -3,7 +3,7 @@
 A small local lab that shows a delivery path from Jenkins to Argo CD, with one Python
 application that exercises it.
 
-- Two VMs (Vagrant, libvirt): `services` runs Jenkins, one build agent, Gitea and a
+- Two VMs (Vagrant; libvirt on Linux, VirtualBox or VMware on macOS): `services` runs Jenkins, one build agent, Gitea and a
   registry; `k3s` runs a single-node k3s with Traefik, Argo CD, Redis and the app.
 - The app (`src/messenger`, FastAPI and redis.asyncio) runs as a StatefulSet. Every pod
   serves HTTP and consumes events. A POST accepted by one pod is acknowledged by every
@@ -18,9 +18,11 @@ The app also serves a small chat-style page at the application URL (see Access):
 
 ## Requirements
 
-Ubuntu x86_64 host with KVM, libvirt, Vagrant (with `vagrant-libvirt`), Ansible, Docker,
-Helm, kubectl, uv, jq. About 20 GiB of free RAM. `make doctor` checks all of it;
-`make host-bootstrap` installs the missing parts.
+Linux x86_64 (KVM and libvirt), Windows 11 with WSL2, macOS on Intel or Apple Silicon.
+Vagrant, Ansible, Helm, kubectl, uv, jq, and a VM provider that suits the host. About 20 GiB of
+free RAM. `make doctor` checks all of it; `make host-bootstrap` installs the missing parts.
+Only Linux has been run end to end; see [docs/PLATFORMS.md](docs/PLATFORMS.md) for the macOS and
+Windows setup and what is still unverified there.
 
 ## Quick start
 

@@ -133,3 +133,15 @@ Five regression tests cover the app-side items and fail on the previous code. Th
 were exercised on a lab rebuilt from scratch: make up, legacy v1, handoff-plan, handoff, GitOps v2 and
 smoke all passed; a provisioning run while the lock is held is refused, the playbook refuses to run outside
 make, and two consecutive provisioning runs in phase argocd change nothing.
+
+## macOS and Windows support
+
+Added at the owner's request: provider per platform (libvirt, VirtualBox, VMware Fusion, Parallels),
+one box per provider in `infra/settings.yaml`, architecture-aware downloads in the Jenkins agent image
+and for the Argo CD CLI, no GNU-only tools in host scripts (fallback lock, sha256, sed, base64),
+platform-aware `make doctor` and `make host-bootstrap`, and `make forward` for Windows browsers with WSL2.
+Verified on Linux: doctor, Vagrantfile validation for each provider, fallback lock (held, refused, stale
+pid replaced), arm64 download URLs exist, `make provision` with the new agent Dockerfile (amd64 build, all
+four tools present), `make forward` serving the app, Jenkins and Gitea on localhost, GitOps v3 through the
+rebuilt agent. Not verified: any boot on macOS or Windows, any arm64 image build, the VMware and Parallels
+networking, VirtualBox host-only on a Mac. Details in docs/PLATFORMS.md.
