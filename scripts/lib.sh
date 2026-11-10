@@ -82,3 +82,19 @@ env_sync() {
 env_digest() { awk '/^  digest:/{print $2}' "$ENVDIR/environments/lab/values.yaml"; }
 env_replicas() { awk '/^replicaCount:/{print $2}' "$ENVDIR/environments/lab/values.yaml"; }
 app_json() { kubectl -n argocd get app messenger -o json; }
+
+# argocd CLI in core mode (talks to the cluster API, no server login); pinned to the chart's app version.
+ARGOCD_VERSION=v3.6.1
+argocd_cli() {
+  local bin="$LAB/bin/argocd"
+  if [[ ! -x "$bin" ]]; then
+    mkdir -p "$LAB/bin"
+    curl -fsSL -o "$bin" "https://github.com/argoproj/argo-cd/releases/download/$ARGOCD_VERSION/argocd-linux-amd64"
+    chmod +x "$bin"
+  fi
+  local kc="$LAB/kubeconfig.argocd"
+  kubectl config view --raw --minify > "$kc"
+  chmod 600 "$kc"
+  KUBECONFIG="$kc" kubectl config set-context --current --namespace=argocd >/dev/null
+  KUBECONFIG="$kc" "$bin" --core "$@"
+}

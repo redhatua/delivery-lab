@@ -27,11 +27,8 @@ app_json | jq -r '"sync: \(.status.sync.status)  health: \(.status.health.status
 app_json | jq -r '.status.resources[]? | "  \(.kind)/\(.name): \(.status // "n/a")"'
 app_json | jq -r '.status.conditions[]? | "condition: \(.type) \(.message)"'
 
-say "server-side diff of the rendered chart against live (read-only)"
-tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-git -C "$ROOT" archive "$CHART_COMMIT" helm/messenger | tar -x -C "$tmp"
-helm template messenger "$tmp/helm/messenger" -n demo -f "$ENVDIR/environments/lab/values.yaml" \
-  | kubectl diff -n demo -f - 2>&1 | head -80 || true
+say "what Argo would change on first sync (expected: tracking annotations only)"
+argocd_cli app diff messenger || true
 
 say "adoption baseline"
 mkdir -p "$LAB/evidence"
