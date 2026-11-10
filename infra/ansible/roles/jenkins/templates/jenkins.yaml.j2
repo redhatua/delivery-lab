@@ -1,0 +1,60 @@
+jenkins:
+  systemMessage: "delivery-lab Jenkins (configured from code, do not edit in the UI)"
+  numExecutors: 0
+  mode: EXCLUSIVE
+  quietPeriod: 0
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: admin
+          password: "${readFile:/run/lab-secrets/jenkins-admin-password}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  nodes:
+    - permanent:
+        name: agent-1
+        remoteFS: /home/jenkins/agent
+        labelString: build
+        numExecutors: 2
+        mode: EXCLUSIVE
+        launcher:
+          ssh:
+            host: agent
+            port: 22
+            credentialsId: agent-ssh
+            sshHostKeyVerificationStrategy:
+              manuallyProvidedKeyVerificationStrategy:
+                key: "${readFile:/run/lab-secrets/agent-host-key-line}"
+unclassified:
+  location:
+    url: "http://{{ services_ip }}:8080/"
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - basicSSHUserPrivateKey:
+              scope: SYSTEM
+              id: agent-ssh
+              username: jenkins
+              description: controller to build agent
+              privateKeySource:
+                directEntry:
+                  privateKey: "${readFile:/run/lab-secrets/agent-ssh-key}"
+          - usernamePassword:
+              scope: GLOBAL
+              id: gitea-writer
+              username: {{ gitea_admin }}
+              password: "${readFile:/run/lab-secrets/gitea-lab-writer-token}"
+              description: write access to the lab repositories
+{% if phase == 'jenkins' %}
+          - file:
+              scope: GLOBAL
+              id: deployer-kubeconfig
+              fileName: kubeconfig
+              secretBytes: "${base64:${readFile:/run/lab-secrets/deployer-kubeconfig}}"
+              description: namespaced deploy identity, only while Jenkins owns deployment
+{% endif %}
+jobs:
+  - file: /var/jenkins_home/casc/jobs.groovy

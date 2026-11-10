@@ -1,0 +1,3 @@
+# Placeholder digest so lint and template checks can run without a real build.
+image:
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

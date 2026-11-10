@@ -1,0 +1,32 @@
+// Rendered by ansible from the delivery phase. Legacy is enabled only while Jenkins
+// owns deployment and the repositories are seeded; gitops only after handoff.
+def appUrl = 'http://{{ services_ip }}:3000/{{ gitea_admin }}/app.git'
+
+def define = { String kind, boolean off ->
+  pipelineJob("messenger-${kind}") {
+    description("${kind} delivery for messenger")
+    disabled(off)
+    parameters {
+      stringParam('SOURCE_SHA', '', 'Exact source commit to build')
+      stringParam('VERSION', '', 'Expected content of the VERSION file')
+    }
+    definition {
+      cpsScm {
+        scm {
+          git {
+            remote {
+              url(appUrl)
+              credentials('gitea-writer')
+            }
+            branch('*/main')
+          }
+        }
+        scriptPath("Jenkinsfile.${kind}")
+        lightweight(true)
+      }
+    }
+  }
+}
+
+define('legacy', {{ 'false' if (phase == 'jenkins' and repos_ready) else 'true' }})
+define('gitops', {{ 'false' if phase == 'argocd' else 'true' }})

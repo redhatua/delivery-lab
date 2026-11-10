@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: messenger
+  labels:
+    {{- include "messenger.labels" . | nindent 4 }}
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: messenger
+                port:
+                  name: http

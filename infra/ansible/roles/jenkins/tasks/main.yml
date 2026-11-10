@@ -1,0 +1,146 @@
+# Needs vars: phase (jenkins|handoff|argocd), repos_ready (bool).
+- name: Local secret material
+  ansible.builtin.include_tasks: local_secrets.yml
+
+- name: Remote directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  become: true
+  loop: [/opt/lab/jenkins, /opt/lab/casc, /opt/lab/state, /srv/lab/jenkins_home]
+
+- name: Jenkins home owned by the jenkins uid
+  ansible.builtin.file:
+    path: /srv/lab/jenkins_home
+    owner: "1000"
+    group: "1000"
+    state: directory
+  become: true
+
+- name: Build contexts
+  ansible.builtin.copy:
+    src: "{{ project_root }}/jenkins/{{ item }}"
+    dest: "/opt/lab/jenkins/{{ item }}"
+    mode: "0644"
+  become: true
+  loop: [Dockerfile.controller, Dockerfile.agent, plugins.txt]
+
+- name: Secrets readable by the controller
+  ansible.builtin.copy:
+    src: "{{ secrets_dir }}/{{ item }}"
+    dest: "/opt/lab/secrets/{{ item }}"
+    owner: "1000"
+    group: "1000"
+    mode: "0400"
+  become: true
+  no_log: true
+  loop: [jenkins-admin-password, gitea-lab-writer-token, agent-ssh-key, agent-host-key-line]
+
+- name: Agent host key (root only, mounted into sshd)
+  ansible.builtin.copy:
+    src: "{{ secrets_dir }}/{{ item.src }}"
+    dest: "/opt/lab/secrets/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  become: true
+  no_log: true
+  loop:
+    - {src: agent-host-key, dest: agent-host-key, mode: "0600"}
+    - {src: agent-host-key.pub, dest: agent-host-key.pub, mode: "0644"}
+
+- name: Deploy credential present only while Jenkins owns deployment
+  ansible.builtin.copy:
+    src: "{{ secrets_dir }}/deployer-kubeconfig"
+    dest: /opt/lab/secrets/deployer-kubeconfig
+    owner: "1000"
+    group: "1000"
+    mode: "0400"
+  become: true
+  no_log: true
+  when: phase == 'jenkins'
+
+- name: Deploy credential removed after handoff
+  ansible.builtin.file:
+    path: /opt/lab/secrets/deployer-kubeconfig
+    state: absent
+  become: true
+  when: phase != 'jenkins'
+
+- name: Phase file for the pipelines (user-facing guard, RBAC is the real fence)
+  ansible.builtin.copy:
+    content: "{{ phase }}"
+    dest: /opt/lab/state/phase
+    mode: "0644"
+  become: true
+
+- name: Docker group id on the VM
+  ansible.builtin.shell: getent group docker | cut -d: -f3
+  register: dgid
+  changed_when: false
+
+- name: Agent public key
+  ansible.builtin.set_fact:
+    docker_gid: "{{ dgid.stdout }}"
+    agent_pubkey: "{{ lookup('ansible.builtin.file', secrets_dir + '/agent-ssh-key.pub') | trim }}"
+
+- name: Jenkins configuration as code
+  ansible.builtin.template:
+    src: jenkins.yaml.j2
+    dest: /opt/lab/casc/jenkins.yaml
+    mode: "0644"
+  become: true
+  notify: Restart jenkins controller
+
+- name: Job definitions
+  ansible.builtin.template:
+    src: jobs.groovy.j2
+    dest: /opt/lab/casc/jobs.groovy
+    mode: "0644"
+  become: true
+  notify: Restart jenkins controller
+
+- name: Compose file for jenkins and agent
+  ansible.builtin.template:
+    src: compose.jenkins.yml.j2
+    dest: /opt/lab/compose.jenkins.yml
+    mode: "0644"
+  become: true
+
+- name: Build and start jenkins and agent
+  ansible.builtin.command: >
+    docker compose -p lab -f /opt/lab/compose.yml -f /opt/lab/compose.jenkins.yml
+    up -d --build
+  become: true
+  register: jup
+  changed_when: "'Started' in jup.stderr or 'Created' in jup.stderr or 'Recreated' in jup.stderr"
+
+- name: Apply controller restart if config changed
+  ansible.builtin.meta: flush_handlers
+
+- name: Jenkins answers
+  ansible.builtin.uri:
+    url: "http://{{ services_ip }}:8080/login"
+  register: jl
+  retries: 40
+  delay: 5
+  until: jl.status == 200
+
+- name: Admin password for api checks
+  ansible.builtin.set_fact:
+    jenkins_admin_password: "{{ lookup('ansible.builtin.file', secrets_dir + '/jenkins-admin-password') }}"
+  no_log: true
+
+- name: Build agent is online
+  ansible.builtin.uri:
+    url: "http://{{ services_ip }}:8080/computer/agent-1/api/json"
+    url_username: admin
+    url_password: "{{ jenkins_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+  register: ag
+  retries: 30
+  delay: 5
+  until: ag.status == 200 and (ag.json.offline | default(true)) == false
+  no_log: true

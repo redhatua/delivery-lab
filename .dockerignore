@@ -1,0 +1,14 @@
+.git
+.lab
+.venv
+.vagrant
+.pytest_cache
+**/__pycache__
+tests
+helm
+infra
+jenkins
+docs
+scripts
+Makefile
+Jenkinsfile.*

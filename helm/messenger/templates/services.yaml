@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: messenger
+  labels:
+    {{- include "messenger.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "messenger.labels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+# Governing service: gives each pod a stable DNS name such as messenger-1.messenger-headless.
+apiVersion: v1
+kind: Service
+metadata:
+  name: messenger-headless
+  labels:
+    {{- include "messenger.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "messenger.labels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

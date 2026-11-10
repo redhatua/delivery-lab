@@ -1,0 +1,45 @@
+# Joins the compose project started by the services role (same project name "lab").
+# The controller has no docker socket; only the agent does, and only for this VM.
+name: lab
+services:
+  jenkins:
+    build:
+      context: /opt/lab/jenkins
+      dockerfile: Dockerfile.controller
+      args:
+        JENKINS_VERSION: "{{ cfg.versions.jenkins }}"
+    image: lab/jenkins:{{ cfg.versions.jenkins }}
+    container_name: jenkins
+    restart: unless-stopped
+    ports:
+      - "{{ services_ip }}:8080:8080"
+    volumes:
+      - /srv/lab/jenkins_home:/var/jenkins_home
+      - /opt/lab/casc:/var/jenkins_home/casc:ro
+      - /opt/lab/secrets:/run/lab-secrets:ro
+  agent:
+    build:
+      context: /opt/lab/jenkins
+      dockerfile: Dockerfile.agent
+      args:
+        AGENT_VERSION: "{{ cfg.versions.jenkins_ssh_agent }}"
+        DOCKER_VERSION: "27.3.1"
+        KUBECTL_VERSION: "{{ cfg.versions.kubectl }}"
+        HELM_VERSION: "{{ cfg.versions.helm }}"
+        UV_VERSION: "0.11.3"
+    image: lab/jenkins-agent:{{ cfg.versions.jenkins_ssh_agent }}
+    container_name: jenkins-agent
+    restart: unless-stopped
+    hostname: agent
+    group_add:
+      - "{{ docker_gid }}"
+    environment:
+      JENKINS_AGENT_SSH_PUBKEY: "{{ agent_pubkey }}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/lab/state:/lab:ro
+      - /opt/lab/secrets/agent-host-key:/etc/ssh/ssh_host_ed25519_key:ro
+      - /opt/lab/secrets/agent-host-key.pub:/etc/ssh/ssh_host_ed25519_key.pub:ro
+      - agent_home:/home/jenkins
+volumes:
+  agent_home:

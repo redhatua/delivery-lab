@@ -1,0 +1,32 @@
+replicaCount: 3
+
+image:
+  repository: 192.168.77.10:5000/messenger
+  # Required. Rendered as repository@digest, never a tag.
+  digest: ""
+
+redis:
+  url: redis://redis.demo.svc.cluster.local:6379/0
+
+keyPrefix: demo
+
+# Enables the opt-in pause hook used by the recovery demo. Not an HTTP endpoint.
+testHooks: true
+
+config:
+  heartbeatInterval: 3
+  leaseTtl: 15
+  displayDeadline: 10
+  resultTtl: 3600
+  reclaimMinIdle: 5
+  reclaimInterval: 2
+
+ingress:
+  path: /
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    memory: 256Mi

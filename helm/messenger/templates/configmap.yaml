@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: messenger
+  labels:
+    {{- include "messenger.labels" . | nindent 4 }}
+data:
+  REDIS_URL: {{ .Values.redis.url | quote }}
+  KEY_PREFIX: {{ .Values.keyPrefix | quote }}
+  HEARTBEAT_INTERVAL: {{ .Values.config.heartbeatInterval | quote }}
+  LEASE_TTL: {{ .Values.config.leaseTtl | quote }}
+  DISPLAY_DEADLINE: {{ .Values.config.displayDeadline | quote }}
+  RESULT_TTL: {{ .Values.config.resultTtl | quote }}
+  RECLAIM_MIN_IDLE: {{ .Values.config.reclaimMinIdle | quote }}
+  RECLAIM_INTERVAL: {{ .Values.config.reclaimInterval | quote }}
+  TEST_HOOKS: {{ ternary "1" "0" .Values.testHooks | quote }}

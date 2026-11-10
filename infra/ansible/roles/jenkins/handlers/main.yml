@@ -1,0 +1,3 @@
+- name: Restart jenkins controller
+  ansible.builtin.command: docker restart jenkins
+  become: true

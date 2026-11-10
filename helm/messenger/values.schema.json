@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["replicaCount", "image", "redis"],
+  "properties": {
+    "replicaCount": {"type": "integer", "minimum": 1, "maximum": 10},
+    "image": {
+      "type": "object",
+      "required": ["repository", "digest"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "digest": {"type": "string", "pattern": "^(sha256:[a-f0-9]{64})?$"}
+      }
+    },
+    "redis": {
+      "type": "object",
+      "required": ["url"],
+      "properties": {"url": {"type": "string", "pattern": "^redis://"}}
+    },
+    "keyPrefix": {"type": "string", "minLength": 1},
+    "testHooks": {"type": "boolean"},
+    "config": {"type": "object"},
+    "ingress": {"type": "object", "properties": {"path": {"type": "string"}}},
+    "resources": {"type": "object"}
+  }
+}
