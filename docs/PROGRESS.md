@@ -92,3 +92,15 @@ succeeded (Helm revision 1, 3 pods). The lab was left in phase `jenkins` with v1
 ready for a live `make handoff-plan` and `make handoff`. The handoff, GitOps, drift,
 rollback and recovery steps were not repeated on the rebuilt lab; their evidence is from the
 first run (`docs/evidence/first-run/`).
+
+## Handoff on the rebuilt lab and chat UI
+
+`make handoff-plan` and `make handoff` were run on the rebuilt lab: smoke passed, pod UIDs and
+template hash unchanged, phase is now `argocd`.
+
+A chat-style page (React, built in the image) was added on top of the app: start broadcast,
+live replies over `/ws`, a colour per pod and a random 1-4 s reply delay. It shipped through
+the GitOps path as v2. The first version failed in the browser on plain http because
+`crypto.randomUUID` is unavailable in insecure contexts; v3 has a fallback. Unit tests did not
+cover this, only a real browser did. Verified: 33 tests, websocket through Traefik, v3
+reconciled by Argo, smoke passed, button works in a browser.
