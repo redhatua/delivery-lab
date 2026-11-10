@@ -25,6 +25,7 @@
     mode: "0644"
   become: true
   loop: [Dockerfile.controller, Dockerfile.agent, plugins.txt]
+  register: build_ctx
 
 - name: Secrets readable by the controller
   ansible.builtin.copy:
@@ -107,11 +108,29 @@
     dest: /opt/lab/compose.jenkins.yml
     mode: "0644"
   become: true
+  register: compose_tpl
 
-- name: Build and start jenkins and agent
+- name: Jenkins images present?
+  ansible.builtin.shell: >
+    docker image inspect lab/jenkins:{{ cfg.versions.jenkins }}
+    lab/jenkins-agent:{{ cfg.versions.jenkins_ssh_agent }}
+  become: true
+  register: have_images
+  changed_when: false
+  failed_when: false
+
+# A build always yields a new image id, which makes compose recreate the
+# containers. So images are built only when something they depend on changed.
+- name: Build jenkins and agent images
+  ansible.builtin.command: >
+    docker compose -p lab -f /opt/lab/compose.yml -f /opt/lab/compose.jenkins.yml build
+  become: true
+  when: build_ctx.changed or compose_tpl.changed or have_images.rc != 0
+
+- name: Start jenkins and agent
   ansible.builtin.command: >
     docker compose -p lab -f /opt/lab/compose.yml -f /opt/lab/compose.jenkins.yml
-    up -d --build
+    up -d
   become: true
   register: jup
   changed_when: "'Started' in jup.stderr or 'Created' in jup.stderr or 'Recreated' in jup.stderr"

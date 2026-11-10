@@ -126,6 +126,10 @@ An independent read-only review of the repository (gpt-6-astra) led to these cha
 - Live feed: the cursors are taken acks first, the websocket limit is reserved before the handshake, the
   page re-reads replies from the status API after a reconnect, and uses the deadline stored in Redis.
 - Build: base images pinned by digest, runtime dependencies hash-locked.
+- Provisioning no longer rebuilds the Jenkins images on every run (each build gave a new image id, so
+  Jenkins and the agent were recreated by every `make provision`); they are built only when their inputs change.
 
 Five regression tests cover the app-side items and fail on the previous code. The shell and Ansible changes
-were exercised on a rebuilt lab (see below).
+were exercised on a lab rebuilt from scratch: make up, legacy v1, handoff-plan, handoff, GitOps v2 and
+smoke all passed; a provisioning run while the lock is held is refused, the playbook refuses to run outside
+make, and two consecutive provisioning runs in phase argocd change nothing.
