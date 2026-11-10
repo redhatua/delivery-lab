@@ -3,11 +3,12 @@ VERSION ?=
 MESSAGE ?= hello
 EVENT_ID ?=
 CONFIRM ?=
+REPLICAS ?=
 
 .DEFAULT_GOAL := help
 .PHONY: help doctor host-bootstrap up provision git-bootstrap test status urls legacy-release \
 	broadcast broadcast-status smoke handoff-plan handoff gitops-release drift-demo rollback \
-	recovery-demo redis-info collect-evidence halt destroy argo-ui refresh-deploy-token
+	recovery-demo scale redis-info collect-evidence halt destroy argo-ui refresh-deploy-token
 
 help: ## List targets and parameters
 	@echo "Targets:"
@@ -69,6 +70,10 @@ drift-demo: ## Scale by hand, watch Argo self-heal
 
 rollback: ## Revert the last release commit in env and verify Argo
 	@scripts/rollback.sh
+
+scale: ## Scale through Git: make scale REPLICAS=5
+	@test -n "$(REPLICAS)" || { echo "REPLICAS is required"; exit 2; }
+	@scripts/scale.sh $(REPLICAS)
 
 recovery-demo: ## Crash before ACK, reclaim by the replacement pod
 	@scripts/recovery-demo.sh

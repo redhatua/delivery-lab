@@ -1,0 +1,21 @@
+{
+  "image": "192.168.77.10:5000/messenger@sha256:6afb226ec3adf6390a3049cae2f38f49a56fd86a00c7233855e3d1c642076e72",
+  "pods": {
+    "messenger-0": "8993d182-2821-4a25-825e-33291e0fc855",
+    "messenger-1": "cabdbce0-b289-4e6f-943b-653883bdfb80",
+    "messenger-2": "08d01c7b-7d3d-43c2-b80c-d504cc4f1e52"
+  },
+  "replicas": 3,
+  "resources": {
+    "ConfigMap/messenger": "ba77ed4c-9b6f-4a39-af43-b2b131c2546f",
+    "Ingress/messenger": "c9f7bcba-14bb-4e2e-9de1-85e724c8c963",
+    "Service/messenger": "a9950e3b-dbe8-4425-8a86-46f80099a213",
+    "Service/messenger-headless": "712cf9fd-6ca6-4548-967e-95bb75b747bc",
+    "StatefulSet/messenger": "a8d09ffe-b1d9-4b50-bf86-bb3e284066ab"
+  },
+  "selector": {
+    "app.kubernetes.io/instance": "messenger",
+    "app.kubernetes.io/name": "messenger"
+  },
+  "template_sha256": "c5ddc459ba83f640c68a6b3f110fcdb09d81be95197c7e32355843ab4a1818a3"
+}
