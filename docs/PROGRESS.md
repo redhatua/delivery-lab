@@ -82,3 +82,13 @@ Raw snapshots: `docs/evidence/EVIDENCE.md` and `docs/evidence/first-run/`.
 - Items 6, 7, 8, 10, 12 are locally verified only, not re-run inside the cluster.
 - Stale consumer groups of scaled-down members (messenger-3, messenger-4) remain in Redis; cleanup is manual.
 - Jenkins deploy token lasts 48 hours. `make refresh-deploy-token` renews it while phase is jenkins.
+
+## Rebuild from scratch
+
+After the first full run the lab was destroyed (`make destroy CONFIRM=lab`) and rebuilt with
+`make up` followed by `make legacy-release VERSION=v1`. Both succeeded on the first try:
+Ansible finished with no failures, CHART_COMMIT came out identical, Jenkins legacy build #1
+succeeded (Helm revision 1, 3 pods). The lab was left in phase `jenkins` with v1 deployed,
+ready for a live `make handoff-plan` and `make handoff`. The handoff, GitOps, drift,
+rollback and recovery steps were not repeated on the rebuilt lab; their evidence is from the
+first run (`docs/evidence/first-run/`).
