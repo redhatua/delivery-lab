@@ -50,5 +50,5 @@ jenkins() {
   pw=$(cat "$SECRETS/jenkins-admin-password")
   crumb=$(curl -fsS -m 10 -c "$JJAR" -b "$JJAR" -u "admin:$pw" "$JENKINS/crumbIssuer/api/json" \
     | jq -r '.crumbRequestField + ":" + .crumb')
-  curl -sS -m 30 -c "$JJAR" -b "$JJAR" -u "admin:$pw" -H "$crumb" -X "$method" "$JENKINS$path" "$@"
+  curl -gsS -m 30 -c "$JJAR" -b "$JJAR" -u "admin:$pw" -H "$crumb" -X "$method" "$JENKINS$path" "$@"
 }
