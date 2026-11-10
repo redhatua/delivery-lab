@@ -46,12 +46,12 @@ say "baseline: chart ${CHART_COMMIT:0:12} env ${ENV_COMMIT:0:12} digest ${LIVE_D
 # 3. revoke the Jenkins deploy identity, drop its credential, prove it is denied
 kubectl -n demo delete rolebinding jenkins-deployer --ignore-not-found >/dev/null
 provision_jenkins
-# a fresh, valid token for the former identity, so a denial cannot be an expired token
-tok=$(kubectl -n demo create token jenkins-deployer --duration 10m)
-ca=$(mktemp); trap 'rm -f "$ca"' EXIT
-kubectl config view --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > "$ca"
-out=$(kubectl --server "https://$K3S_IP:6443" --certificate-authority "$ca" \
-  --token "$tok" -n demo patch statefulset messenger --type merge -p '{"spec":{"replicas":3}}' --dry-run=server 2>&1 || true)
+# a fresh, valid token for the former identity, in a token-only kubeconfig, so a
+# denial cannot be an expired token and admin credentials cannot leak into the check
+probe=$(mktemp); trap 'rm -f "$probe"' EXIT
+OUT="$probe" K3S_IP="$K3S_IP" TOKEN_DURATION=10m "$ROOT/scripts/issue-deployer-kubeconfig.sh"
+out=$(env -u KUBECONFIG kubectl --kubeconfig "$probe" -n demo patch statefulset messenger \
+  --type merge -p '{"spec":{"replicas":3}}' --dry-run=server 2>&1 || true)
 echo "$out" | grep -qi forbidden || fail "former deploy identity was not denied: $out"
 say "former deploy identity is forbidden: $(echo "$out" | head -1 | cut -c1-140)"
 
