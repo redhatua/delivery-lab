@@ -48,7 +48,9 @@ kubectl -n demo delete rolebinding jenkins-deployer --ignore-not-found >/dev/nul
 provision_jenkins
 # a fresh, valid token for the former identity, so a denial cannot be an expired token
 tok=$(kubectl -n demo create token jenkins-deployer --duration 10m)
-out=$(kubectl --server "https://$K3S_IP:6443" --certificate-authority <(kubectl config view --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d) \
+ca=$(mktemp); trap 'rm -f "$ca"' EXIT
+kubectl config view --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > "$ca"
+out=$(kubectl --server "https://$K3S_IP:6443" --certificate-authority "$ca" \
   --token "$tok" -n demo patch statefulset messenger --type merge -p '{"spec":{"replicas":3}}' --dry-run=server 2>&1 || true)
 echo "$out" | grep -qi forbidden || fail "former deploy identity was not denied: $out"
 say "former deploy identity is forbidden: $(echo "$out" | head -1 | cut -c1-140)"
