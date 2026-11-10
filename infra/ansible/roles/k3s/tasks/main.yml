@@ -1,0 +1,113 @@
+- name: Interface that carries the lab address
+  ansible.builtin.shell: "ip -o -4 addr show | awk '$4 ~ /^{{ k3s_ip }}\\// {print $2}'"
+  register: iface
+  changed_when: false
+
+- name: Fail early without a lab interface
+  ansible.builtin.assert:
+    that: iface.stdout | length > 0
+    fail_msg: "no interface has {{ k3s_ip }}"
+
+- name: Remember interface
+  ansible.builtin.set_fact:
+    lab_iface: "{{ iface.stdout }}"
+
+- name: k3s config directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: k3s config
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    mode: "0600"
+  become: true
+  notify: Restart k3s
+
+- name: Registry mirror for containerd
+  ansible.builtin.template:
+    src: registries.yaml.j2
+    dest: /etc/rancher/k3s/registries.yaml
+    mode: "0600"
+  become: true
+  notify: Restart k3s
+
+- name: Installed k3s version
+  ansible.builtin.command: k3s --version
+  register: k3s_ver
+  changed_when: false
+  failed_when: false
+
+- name: Download k3s installer
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /usr/local/bin/k3s-install.sh
+    mode: "0755"
+  become: true
+
+- name: Install pinned k3s
+  ansible.builtin.command: /usr/local/bin/k3s-install.sh
+  become: true
+  environment:
+    INSTALL_K3S_VERSION: "{{ cfg.versions.k3s }}"
+    INSTALL_K3S_SKIP_START: "true"
+  when: cfg.versions.k3s.split('+')[0] not in k3s_ver.stdout
+
+- name: Manifests directory
+  ansible.builtin.file:
+    path: /var/lib/rancher/k3s/server/manifests
+    state: directory
+    mode: "0700"
+  become: true
+
+- name: Traefik node port config
+  ansible.builtin.template:
+    src: traefik-config.yaml.j2
+    dest: /var/lib/rancher/k3s/server/manifests/traefik-config.yaml
+    mode: "0600"
+  become: true
+
+- name: Flush handlers before first start
+  ansible.builtin.meta: flush_handlers
+
+- name: k3s running
+  ansible.builtin.systemd:
+    name: k3s
+    state: started
+    enabled: true
+  become: true
+
+- name: Node is Ready
+  ansible.builtin.command: k3s kubectl wait --for=condition=Ready node --all --timeout=10s
+  become: true
+  register: node_ready
+  retries: 30
+  delay: 5
+  until: node_ready.rc == 0
+  changed_when: false
+
+- name: Read admin kubeconfig
+  ansible.builtin.slurp:
+    src: /etc/rancher/k3s/k3s.yaml
+  become: true
+  register: kc
+
+- name: Store scoped kubeconfig on the host
+  ansible.builtin.copy:
+    content: "{{ kc.content | b64decode | replace('https://127.0.0.1:6443', 'https://' + k3s_ip + ':6443') | replace('default', 'delivery-lab') }}"
+    dest: "{{ kubeconfig_admin }}"
+    mode: "0600"
+  delegate_to: localhost
+  no_log: true
+
+- name: Traefik uses the NodePort
+  ansible.builtin.command: k3s kubectl -n kube-system get svc traefik -o jsonpath={.spec.type}/{.spec.ports[0].nodePort}
+  become: true
+  register: traefik_svc
+  retries: 30
+  delay: 5
+  until: traefik_svc.stdout == 'NodePort/30080'
+  changed_when: false

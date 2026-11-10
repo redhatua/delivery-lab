@@ -1,0 +1,12 @@
+cfg: "{{ lookup('file', playbook_dir + '/../settings.yaml') | from_yaml }}"
+project_root: "{{ (playbook_dir + '/../..') | realpath }}"
+lab_dir: "{{ project_root }}/.lab"
+secrets_dir: "{{ lab_dir }}/secrets"
+kubeconfig_admin: "{{ lab_dir }}/kubeconfig"
+services_ip: "{{ cfg.vms.services.ip }}"
+k3s_ip: "{{ cfg.vms.k3s.ip }}"
+registry_addr: "{{ services_ip }}:5000"
+gitea_url: "http://{{ services_ip }}:3000"
+gitea_admin: lab
+kc_env:
+  KUBECONFIG: "{{ kubeconfig_admin }}"

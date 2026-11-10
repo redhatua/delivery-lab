@@ -1,0 +1,28 @@
+# Single place for lab sizing, addresses and version pins.
+lab_name: delivery-lab
+box: cloud-image/ubuntu-24.04
+box_version: "20260926.0.0"
+network:
+  name: delivery-lab-net
+  cidr: 192.168.77.0/24
+vms:
+  services:
+    ip: 192.168.77.10
+    cpus: 4
+    memory_mb: 8192
+    disk_gb: 40
+  k3s:
+    ip: 192.168.77.20
+    cpus: 4
+    memory_mb: 8192
+    disk_gb: 40
+versions:
+  k3s: v1.35.10+k3s1
+  argo_cd_chart: 10.17.1
+  jenkins: 2.580.2-lts-jdk21
+  jenkins_ssh_agent: 9.4.0-jdk21
+  gitea: 1.27.3
+  registry: 3.1.2
+  redis: 8.8.4-alpine
+  helm: v4.3.1
+  kubectl: v1.35.4

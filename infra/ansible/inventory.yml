@@ -1,0 +1,15 @@
+all:
+  vars:
+    ansible_user: vagrant
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o IdentitiesOnly=yes -o UserKnownHostsFile=/dev/null"
+  children:
+    services_group:
+      hosts:
+        services:
+          ansible_host: 192.168.77.10
+          ansible_ssh_private_key_file: "{{ playbook_dir }}/../.vagrant/machines/services/libvirt/private_key"
+    k3s_group:
+      hosts:
+        k3s:
+          ansible_host: 192.168.77.20
+          ansible_ssh_private_key_file: "{{ playbook_dir }}/../.vagrant/machines/k3s/libvirt/private_key"

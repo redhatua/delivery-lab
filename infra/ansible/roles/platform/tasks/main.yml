@@ -1,0 +1,80 @@
+# Runs on the workstation against the lab kubeconfig only.
+- name: Namespaces
+  ansible.builtin.shell: |
+    kubectl get ns {{ item }} >/dev/null 2>&1 || kubectl create ns {{ item }}
+  environment: "{{ kc_env }}"
+  register: ns
+  changed_when: "'created' in ns.stdout"
+  loop: [demo, argocd, lab-system]
+
+- name: Control record exists (created once, never reset)
+  ansible.builtin.shell: |
+    kubectl -n lab-system get cm lab-control >/dev/null 2>&1 ||
+      kubectl -n lab-system create cm lab-control --from-literal=phase=jenkins
+  environment: "{{ kc_env }}"
+  register: ctl
+  changed_when: ctl.stdout | length > 0
+
+- name: Current delivery phase
+  ansible.builtin.command: kubectl -n lab-system get cm lab-control -o jsonpath={.data.phase}
+  environment: "{{ kc_env }}"
+  register: phase_out
+  changed_when: false
+
+- name: Remember phase
+  ansible.builtin.set_fact:
+    phase: "{{ phase_out.stdout }}"
+
+- name: Show phase
+  ansible.builtin.debug:
+    msg: "delivery phase is {{ phase }}"
+
+- name: Redis platform release
+  ansible.builtin.command: >
+    helm upgrade --install redis {{ project_root }}/infra/charts/redis
+    -n demo --set image=redis:{{ cfg.versions.redis }} --wait --timeout 3m
+  environment: "{{ kc_env }}"
+  register: redis_rel
+  changed_when: "'REVISION: 1' in redis_rel.stdout"
+
+- name: Argo CD chart repo
+  ansible.builtin.command: helm repo add argo https://argoproj.github.io/argo-helm --force-update
+  changed_when: false
+
+- name: Argo CD
+  ansible.builtin.command: >
+    helm upgrade --install argocd argo/argo-cd --version {{ cfg.versions.argo_cd_chart }}
+    -n argocd -f {{ role_path }}/files/argocd-values.yaml --wait --timeout 8m
+  environment: "{{ kc_env }}"
+  changed_when: false
+
+- name: Read-only credentials for argo on the gitea repositories
+  ansible.builtin.shell: |
+    kubectl -n argocd apply -f - <<EOF
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: gitea-repo-creds
+      labels:
+        argocd.argoproj.io/secret-type: repo-creds
+    stringData:
+      type: git
+      url: {{ gitea_url }}/{{ gitea_admin }}
+      username: {{ gitea_admin }}
+      password: $(cat {{ secrets_dir }}/gitea-lab-reader-token)
+    EOF
+  environment: "{{ kc_env }}"
+  no_log: true
+  changed_when: false
+
+- name: Deploy identity (only while Jenkins owns deployment)
+  ansible.builtin.include_tasks: deployer.yml
+  when: phase == 'jenkins'
+
+- name: Deploy identity must stay revoked after handoff
+  ansible.builtin.command: kubectl -n demo get rolebinding jenkins-deployer
+  environment: "{{ kc_env }}"
+  register: rb
+  failed_when: rb.rc == 0
+  changed_when: false
+  when: phase != 'jenkins'

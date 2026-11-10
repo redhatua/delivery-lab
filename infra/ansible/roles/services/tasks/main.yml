@@ -1,0 +1,92 @@
+- name: Docker engine and compose plugin
+  ansible.builtin.apt:
+    name: [docker.io, docker-compose-v2]
+    state: present
+  become: true
+
+- name: Allow the lab HTTP registry in the VM docker daemon
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {"insecure-registries": ["{{ registry_addr }}"]}
+    mode: "0644"
+  become: true
+  notify: Restart docker
+
+- name: Flush handlers so docker is ready
+  ansible.builtin.meta: flush_handlers
+
+- name: Vagrant user may use docker
+  ansible.builtin.user:
+    name: vagrant
+    groups: docker
+    append: true
+  become: true
+
+- name: Data and compose directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  become: true
+  loop:
+    - /opt/lab
+    - /opt/lab/secrets
+    - /srv/lab/registry
+    - /srv/lab/gitea
+
+- name: Compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: /opt/lab/compose.yml
+    mode: "0644"
+  become: true
+
+- name: Start registry and gitea
+  ansible.builtin.command: docker compose -p lab -f /opt/lab/compose.yml up -d
+  become: true
+  register: compose_up
+  changed_when: "'Started' in compose_up.stderr or 'Created' in compose_up.stderr or 'Recreated' in compose_up.stderr"
+
+- name: Wait for gitea
+  ansible.builtin.uri:
+    url: "http://{{ services_ip }}:3000/api/healthz"
+  register: gitea_health
+  retries: 30
+  delay: 3
+  until: gitea_health.status == 200
+
+- name: Registry answers on the lab address
+  ansible.builtin.uri:
+    url: "http://{{ registry_addr }}/v2/"
+  register: reg_health
+  retries: 15
+  delay: 2
+  until: reg_health.status == 200
+
+- name: Generated gitea admin password (kept across reruns)
+  ansible.builtin.set_fact:
+    gitea_admin_password: "{{ lookup('ansible.builtin.password', secrets_dir + '/gitea-admin-password chars=ascii_letters,digits length=24') }}"
+  delegate_to: localhost
+  no_log: true
+
+- name: Existing gitea users
+  ansible.builtin.command: docker exec -u git gitea gitea admin user list
+  become: true
+  register: gitea_users
+  changed_when: false
+
+- name: Create gitea admin
+  ansible.builtin.command: >
+    docker exec -u git gitea gitea admin user create --admin
+    --username {{ gitea_admin }} --email lab@example.invalid
+    --password {{ gitea_admin_password }} --must-change-password=false
+  become: true
+  no_log: true
+  when: gitea_admin not in gitea_users.stdout
+
+- name: Gitea API tokens (reader and writer)
+  ansible.builtin.include_tasks: gitea_token.yml
+  loop:
+    - {name: lab-reader, scopes: "read:repository"}
+    - {name: lab-writer, scopes: "write:repository,write:user"}

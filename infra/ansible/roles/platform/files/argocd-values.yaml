@@ -1,0 +1,9 @@
+global:
+  domain: argocd.lab.invalid
+configs:
+  params:
+    server.insecure: true
+dex:
+  enabled: false
+notifications:
+  enabled: false

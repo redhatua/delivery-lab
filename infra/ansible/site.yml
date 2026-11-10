@@ -1,0 +1,27 @@
+- name: Local secrets directory
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - ansible.builtin.file:
+        path: "{{ secrets_dir }}"
+        state: directory
+        mode: "0700"
+
+- name: Base
+  hosts: all
+  roles: [common]
+
+- name: Services VM
+  hosts: services
+  roles: [services]
+
+- name: k3s VM
+  hosts: k3s
+  roles: [k3s]
+
+- name: Platform on k3s
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles: [platform]

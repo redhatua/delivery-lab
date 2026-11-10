@@ -1,0 +1,30 @@
+# Two VMs on a private libvirt network. Sizing comes from settings.yaml.
+require 'yaml'
+
+cfg = YAML.load_file(File.join(__dir__, 'settings.yaml'))
+
+Vagrant.configure('2') do |config|
+  config.vm.box = cfg['box']
+  config.vm.box_version = cfg['box_version']
+  config.vm.synced_folder '.', '/vagrant', disabled: true
+  config.ssh.insert_key = true
+
+  cfg['vms'].each do |name, vm|
+    config.vm.define name do |node|
+      node.vm.hostname = name
+      node.vm.network :private_network,
+        ip: vm['ip'],
+        libvirt__network_name: cfg['network']['name'],
+        libvirt__forward_mode: 'nat',
+        libvirt__dhcp_enabled: false
+      node.vm.provider :libvirt do |lv|
+        lv.driver = 'kvm'
+        lv.uri = 'qemu:///system'
+        lv.cpus = vm['cpus']
+        lv.memory = vm['memory_mb']
+        lv.machine_virtual_size = vm['disk_gb']
+        lv.default_prefix = "#{cfg['lab_name']}_"
+      end
+    end
+  end
+end

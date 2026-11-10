@@ -1,0 +1,26 @@
+# Namespaced identity for the Jenkins legacy job. Helm 4 keeps release state in
+# secrets of the release namespace, hence the secrets rule.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins-deployer
+  namespace: demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jenkins-deployer
+  namespace: demo
+rules:
+  - apiGroups: [""]
+    resources: [services, configmaps, secrets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [statefulsets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [pods, events]
+    verbs: [get, list, watch]

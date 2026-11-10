@@ -1,0 +1,23 @@
+- name: Deployer service account and role
+  ansible.builtin.command: kubectl apply -f {{ role_path }}/files/deployer-role.yaml
+  environment: "{{ kc_env }}"
+  changed_when: false
+
+- name: Deployer binding
+  ansible.builtin.command: kubectl apply -f {{ role_path }}/files/deployer-binding.yaml
+  environment: "{{ kc_env }}"
+  changed_when: false
+
+- name: Short-lived deployer token (refreshed by make refresh-deploy-token)
+  ansible.builtin.stat:
+    path: "{{ secrets_dir }}/deployer-kubeconfig"
+  register: dk
+
+- name: Issue deployer kubeconfig
+  ansible.builtin.script: "{{ project_root }}/scripts/issue-deployer-kubeconfig.sh"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_admin }}"
+    OUT: "{{ secrets_dir }}/deployer-kubeconfig"
+    K3S_IP: "{{ k3s_ip }}"
+  delegate_to: localhost
+  when: not dk.stat.exists

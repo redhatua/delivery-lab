@@ -1,0 +1,8 @@
+node-ip: {{ k3s_ip }}
+advertise-address: {{ k3s_ip }}
+tls-san:
+  - {{ k3s_ip }}
+flannel-iface: {{ lab_iface }}
+write-kubeconfig-mode: "0600"
+disable:
+  - servicelb

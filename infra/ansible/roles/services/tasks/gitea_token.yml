@@ -1,0 +1,40 @@
+# Token values are only shown once, so they live in the ignored secrets dir.
+- name: "Token file for {{ item.name }}"
+  ansible.builtin.stat:
+    path: "{{ secrets_dir }}/gitea-{{ item.name }}-token"
+  delegate_to: localhost
+  register: tok
+
+- name: "Drop stale {{ item.name }} token in gitea"
+  ansible.builtin.uri:
+    url: "{{ gitea_url }}/api/v1/users/{{ gitea_admin }}/tokens/{{ item.name }}"
+    method: DELETE
+    url_username: "{{ gitea_admin }}"
+    url_password: "{{ gitea_admin_password }}"
+    force_basic_auth: true
+    status_code: [204, 404]
+  no_log: true
+  when: not tok.stat.exists
+
+- name: "Create {{ item.name }} token"
+  ansible.builtin.uri:
+    url: "{{ gitea_url }}/api/v1/users/{{ gitea_admin }}/tokens"
+    method: POST
+    url_username: "{{ gitea_admin }}"
+    url_password: "{{ gitea_admin_password }}"
+    force_basic_auth: true
+    body_format: json
+    body: {name: "{{ item.name }}", scopes: "{{ item.scopes.split(',') }}"}
+    status_code: 201
+  register: new_tok
+  no_log: true
+  when: not tok.stat.exists
+
+- name: "Store {{ item.name }} token"
+  ansible.builtin.copy:
+    content: "{{ new_tok.json.sha1 }}"
+    dest: "{{ secrets_dir }}/gitea-{{ item.name }}-token"
+    mode: "0600"
+  delegate_to: localhost
+  no_log: true
+  when: not tok.stat.exists

@@ -1,0 +1,27 @@
+# Registry and Gitea. Both bind the lab address only, not the NAT interface.
+name: lab
+services:
+  registry:
+    image: registry:{{ cfg.versions.registry }}
+    container_name: registry
+    restart: unless-stopped
+    ports:
+      - "{{ services_ip }}:5000:5000"
+    volumes:
+      - /srv/lab/registry:/var/lib/registry
+  gitea:
+    image: gitea/gitea:{{ cfg.versions.gitea }}
+    container_name: gitea
+    restart: unless-stopped
+    environment:
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__server__ROOT_URL: "{{ gitea_url }}/"
+      GITEA__server__DOMAIN: "{{ services_ip }}"
+      GITEA__server__DISABLE_SSH: "true"
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__webhook__ALLOWED_HOST_LIST: "*"
+    ports:
+      - "{{ services_ip }}:3000:3000"
+    volumes:
+      - /srv/lab/gitea:/data

@@ -1,0 +1,5 @@
+# containerd must be told explicitly that this registry speaks plain HTTP.
+mirrors:
+  "{{ registry_addr }}":
+    endpoint:
+      - "http://{{ registry_addr }}"
