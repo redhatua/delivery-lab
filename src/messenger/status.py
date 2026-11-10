@@ -1,3 +1,10 @@
+from datetime import datetime, timezone
+
+
+def iso(ms: int) -> str:
+    return datetime.fromtimestamp(ms / 1000, timezone.utc).isoformat()
+
+
 def compute_status(
     expected: list[str],
     ack_times_ms: dict[str, int],

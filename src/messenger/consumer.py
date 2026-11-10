@@ -108,10 +108,16 @@ class Member:
             await self.store.transport_ack(entry_id)
             return "skipped"
         await self._test_pause()
+        await self._reply_delay()
         result = await self.store.commit_ack(event.event_id, entry_id)
         log(logger, logging.INFO, "entry handled", entry=entry_id, event_id=event.event_id,
             result=result)
         return result
+
+    async def _reply_delay(self) -> None:
+        # Makes replies arrive spread over a few seconds, like people answering.
+        if self.s.reply_delay_max > 0:
+            await asyncio.sleep(random.uniform(self.s.reply_delay_min, self.s.reply_delay_max))
 
     async def _test_pause(self) -> None:
         if not self.s.test_hooks:

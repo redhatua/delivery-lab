@@ -39,6 +39,22 @@ Event and idempotency keys expire together, `RESULT_TTL` after creation, and are
 - Heartbeat overwrites the identity of a member name; a late old process could briefly
   overwrite a newer one, but deregistration is guarded by UID.
 
+## Chat UI and live feed
+
+The image also serves a small React app (`ui/`, built by the Dockerfile's node stage into
+`/app/static`, no CDN at runtime) at `/`. It shows each broadcast as a message from its
+sender, replies as they arrive (colour per pod, time and delay since the broadcast), and a
+typing indicator for recipients that have not answered yet.
+
+- `GET /ws` (websocket): pushes `hello`, `event` and `ack` messages. It reads the shared
+  `demo:events` and `demo:acks` streams with plain XREAD from the moment of connection, so
+  any pod can serve it and it never affects delivery. At most 8 feeds per pod.
+- Recipients wait a random `REPLY_DELAY_MIN`..`REPLY_DELAY_MAX` seconds (default 1 to 4)
+  before the ACK, to look like people answering. Keep the maximum below `RECLAIM_MIN_IDLE`.
+  Set both to 0 to disable. Tests run with 0.
+- uvicorn needs the `websockets` package to serve `/ws`; it is pinned in requirements.txt.
+- Local UI development: `scripts/run-local.sh 3`, then `cd ui && npm install && npm run dev`.
+
 ## Test hook
 
 `TEST_HOOKS=1` enables a one-shot pause before the ACK script. Set

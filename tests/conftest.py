@@ -23,7 +23,8 @@ def fast_settings(prefix: str, name: str, **kw) -> Settings:
         pod_name=name, pod_uid=f"uid-{uuid.uuid4().hex[:8]}", pod_ip="10.0.0.1",
         redis_url=REDIS_URL, prefix=prefix, heartbeat_interval=0.2, lease_ttl=2.0,
         display_deadline=3.0, reclaim_min_idle=0.5, reclaim_interval=0.2,
-        backoff_base=0.1, backoff_max=0.5, version="vtest", source_sha="abc123",
+        backoff_base=0.1, backoff_max=0.5, reply_delay_min=0.0, reply_delay_max=0.0,
+        version="vtest", source_sha="abc123",
     )
     base.update(kw)
     return Settings(**base)

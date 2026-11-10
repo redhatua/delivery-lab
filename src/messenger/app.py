@@ -2,11 +2,12 @@ import asyncio
 import contextlib
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from redis.exceptions import RedisError
 
 from messenger.config import Settings
@@ -14,14 +15,11 @@ from messenger.consumer import Member
 from messenger.logs import log
 from messenger.models import (EVENT_ID_RE, IDEMPOTENCY_KEY_PATTERN, BroadcastRequest,
                               fingerprint, idempotency_hash)
-from messenger.status import compute_status
+from messenger.feed import feed
+from messenger.status import compute_status, iso
 from messenger.store import Store
 
 logger = logging.getLogger("messenger.app")
-
-
-def iso(ms: int) -> str:
-    return datetime.fromtimestamp(ms / 1000, timezone.utc).isoformat()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -134,6 +132,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "status": status,
             "served_by": identity(),
         }
+
+    MAX_FEEDS = 8  # each open feed holds one Redis connection while it waits
+
+    @app.websocket("/ws")
+    async def ws_feed(ws: WebSocket) -> None:
+        """Pushes new broadcasts and acknowledgments to a browser as they happen."""
+        store: Store = ws.app.state.store
+        if getattr(ws.app.state, "feeds", 0) >= MAX_FEEDS:
+            await ws.close(code=1013)
+            return
+        await ws.accept()
+        ws.app.state.feeds = getattr(ws.app.state, "feeds", 0) + 1
+        # a pending receive lets us notice the browser going away
+        closed = asyncio.ensure_future(ws.receive())
+        try:
+            await ws.send_json({"type": "hello", "served_by": identity()})
+            idle = 0
+            async for msg in feed(store):
+                if closed.done():
+                    break
+                if msg is None:
+                    idle += 1
+                    if idle % 15 == 0:  # keep proxies from timing the socket out
+                        await ws.send_json({"type": "tick"})
+                    continue
+                await ws.send_json(msg)
+        except (WebSocketDisconnect, RedisError, OSError, TimeoutError, RuntimeError):
+            pass
+        finally:
+            closed.cancel()
+            ws.app.state.feeds -= 1
+            try:
+                await ws.close()
+            except RuntimeError:
+                pass
+
+    # Built UI, present in the image. Mounted last so API routes win.
+    if s.static_dir and Path(s.static_dir).is_dir():
+        app.mount("/", StaticFiles(directory=s.static_dir, html=True), name="ui")
 
     return app
 

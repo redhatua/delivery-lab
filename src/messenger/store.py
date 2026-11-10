@@ -203,6 +203,19 @@ class Store:
 
     # --- consuming --------------------------------------------------------
 
+    async def last_ids(self) -> dict[str, str]:
+        """Newest entry id of each stream, so a feed can start from 'now'."""
+        out = {}
+        for key in (self.events_key, self.acks_key):
+            last = await self.r.xrevrange(key, count=1)
+            out[key] = last[0][0] if last else "0-0"
+        return out
+
+    async def read_feed(self, ids: dict[str, str], block_ms: int) -> list[tuple[str, str, dict]]:
+        """Plain XREAD (no group) over events and acks. Returns (stream, id, fields)."""
+        resp = await self.r.xread(ids, count=50, block=block_ms)
+        return [(key, eid, f) for key, entries in resp for eid, f in entries]
+
     async def read_new(self, block_ms: int) -> list[tuple[str, dict]]:
         resp = await self.r.xreadgroup(
             self.s.group, self.s.pod_uid, {self.events_key: ">"}, count=10, block=block_ms

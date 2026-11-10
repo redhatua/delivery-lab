@@ -30,6 +30,11 @@ class Settings:
     result_ttl: float = 3600.0
     reclaim_min_idle: float = 5.0
     reclaim_interval: float = 2.0
+    # Simulated think time before a recipient replies. Keep the maximum below
+    # reclaim_min_idle, or a member could reclaim its own entry mid-delay.
+    reply_delay_min: float = 1.0
+    reply_delay_max: float = 4.0
+    static_dir: str = ""
     test_hooks: bool = False
     backoff_base: float = 0.5
     backoff_max: float = 10.0
@@ -56,6 +61,9 @@ class Settings:
             result_ttl=f("RESULT_TTL", cls.result_ttl),
             reclaim_min_idle=f("RECLAIM_MIN_IDLE", cls.reclaim_min_idle),
             reclaim_interval=f("RECLAIM_INTERVAL", cls.reclaim_interval),
+            reply_delay_min=f("REPLY_DELAY_MIN", cls.reply_delay_min),
+            reply_delay_max=f("REPLY_DELAY_MAX", cls.reply_delay_max),
+            static_dir=env.get("STATIC_DIR", str(Path(__file__).resolve().parents[2] / "static")),
             test_hooks=env.get("TEST_HOOKS", "0") == "1",
             backoff_base=f("BACKOFF_BASE", cls.backoff_base),
             backoff_max=f("BACKOFF_MAX", cls.backoff_max),

@@ -6,3 +6,6 @@ __pycache__/
 .pytest_cache/
 *.retry
 .ci/
+ui/node_modules/
+ui/dist/
+static/

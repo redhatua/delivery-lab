@@ -12,6 +12,10 @@ application that exercises it.
   Argo CD without reinstalling anything. After that Jenkins only builds, pushes an image
   and commits its digest to Git (`Jenkinsfile.gitops`).
 
+The app also serves a small chat-style page at the application URL (see Access): press
+**Start broadcast** and watch the sender and each pod's reply appear live, with a random
+1 to 4 second pause per reply and one colour per pod. It uses a websocket (`/ws`).
+
 ## Requirements
 
 Ubuntu x86_64 host with KVM, libvirt, Vagrant (with `vagrant-libvirt`), Ansible, Docker,

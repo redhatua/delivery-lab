@@ -12,3 +12,5 @@ docs
 scripts
 Makefile
 Jenkinsfile.*
+ui/node_modules
+ui/dist
